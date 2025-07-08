@@ -225,5 +225,5 @@
   }
 }
 /* 全局样式文件中添加 */
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+*:-webkit-scrollbar { display: none; }
+*{ -ms-overflow-style: none; scrollbar-width: none; }

@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { toast } from 'sonner';
 import { Info, RotateCcw, Play, Pause } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import JSZip from 'jszip';
@@ -28,7 +27,6 @@ const VideoAnnotator: React.FC = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [start, setStart] = useState<{ x: number; y: number } | null>(null);
   const [currentZoom, setCurrentZoom] = useState(1);
-  const [toastMsg, setToastMsg] = useState('');
   const [error, setError] = useState('');
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -40,14 +38,8 @@ const VideoAnnotator: React.FC = () => {
   const [highlightIdx, setHighlightIdx] = useState<number | null>(null);
   const [drawMode, setDrawMode] = useState(false);
   const [npzUrl, setNpzUrl] = useState('');
-
-  // Toast logic (use sonner)
-  useEffect(() => {
-    if (toastMsg) {
-      toast(toastMsg, { duration: 2000 });
-      setToastMsg('');
-    }
-  }, [toastMsg]);
+  const [fontSize, setFontSize] = useState<number>(32); // 默认字号18
+  const [lineWidth, setLineWidth] = useState<number>(5); // 默认线宽3
 
   // Video event listeners
   useEffect(() => {
@@ -79,21 +71,20 @@ const VideoAnnotator: React.FC = () => {
     coordinates.forEach((coord, idx) => {
       ctx.beginPath();
       ctx.strokeStyle = idx === highlightIdx ? '#fff' : boxColor;
-      ctx.lineWidth = idx === highlightIdx ? 3 : 2;
+      ctx.lineWidth = lineWidth;
       ctx.globalAlpha = idx === highlightIdx ? 1 : 0.9;
       ctx.strokeRect(coord[0], coord[1], coord[2] - coord[0], coord[3] - coord[1]);
       ctx.fillStyle = idx === highlightIdx ? '#fff' : textColor;
       ctx.globalAlpha = 1;
-      ctx.font = '12px Arial';
+      ctx.font = `${fontSize}px Arial`;
       ctx.fillText(`(${coord[0]},${coord[1]})`, coord[0], coord[1] - 5);
-      ctx.fillText(`(${coord[2]},${coord[3]})`, coord[2], coord[3] + 15);
-      // 框中心用圆形标注"1234"
+      ctx.fillText(`(${coord[2]},${coord[3]})`, coord[2], coord[3] + fontSize);
+      // 框中心用圆形标注编号
       const centerX = (coord[0] + coord[2]) / 2;
       const centerY = (coord[1] + coord[3]) / 2;
-      const radius = 9; // 缩小圆的半径
-      // 画圆
+      const centerRadius = Math.max(10, fontSize * 0.7);
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, centerRadius, 0, 2 * Math.PI);
       ctx.fillStyle = idx === highlightIdx ? '#fff' : '#222';
       ctx.globalAlpha = 0.85;
       ctx.fill();
@@ -101,8 +92,7 @@ const VideoAnnotator: React.FC = () => {
       ctx.strokeStyle = idx === highlightIdx ? boxColor : '#fff';
       ctx.globalAlpha = 1;
       ctx.stroke();
-      // 写数字
-      ctx.font = 'bold 11px Arial'; // 缩小字体
+      ctx.font = `bold ${fontSize - 2}px Arial`;
       ctx.fillStyle = idx === highlightIdx ? boxColor : '#fff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -110,7 +100,7 @@ const VideoAnnotator: React.FC = () => {
       ctx.textAlign = 'start';
       ctx.textBaseline = 'alphabetic';
     });
-  }, [coordinates, boxColor, textColor, highlightIdx]);
+  }, [coordinates, boxColor, textColor, highlightIdx, fontSize, lineWidth]);
 
   // 修复 canvas 尺寸同步问题
   useEffect(() => {
@@ -121,11 +111,12 @@ const VideoAnnotator: React.FC = () => {
 
     const setCanvasSize = () => {
       if (video.videoWidth && video.videoHeight) {
+        // 像素宽高：原始分辨率
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         drawCanvas.width = video.videoWidth;
         drawCanvas.height = video.videoHeight;
-        // 样式宽高用于适配缩放
+        // 样式宽高：和video实际显示宽高一致
         canvas.style.width = video.offsetWidth + 'px';
         canvas.style.height = video.offsetHeight + 'px';
         drawCanvas.style.width = video.offsetWidth + 'px';
@@ -236,7 +227,6 @@ const VideoAnnotator: React.FC = () => {
     setCoordinates((prev) => {
       const next = [...prev, newCoord];
       setInputValue(next.map((c) => `[${c.join(',')}]`).join(','));
-      setToastMsg('已添加标注框');
       // 自动滚动到新坐标
       setTimeout(() => {
         const list = document.getElementById('coord-list-scroll');
@@ -275,7 +265,6 @@ const VideoAnnotator: React.FC = () => {
         }) || []
       );
     } catch {
-      setToastMsg('坐标格式错误，请检查输入');
       return [];
     }
   };
@@ -294,17 +283,17 @@ const VideoAnnotator: React.FC = () => {
   };
 
   // Check bounds
-  const checkBounds = (coord: number[], index: number) => {
+  const checkBounds = (coord: number[]) => {
     const video = videoRef.current;
     if (!video) return;
     const [x1, y1, x2, y2] = coord;
-    const outOfBounds = [];
+    const outOfBounds: string[] = [];
     if (x1 < 0) outOfBounds.push('左');
     if (y1 < 0) outOfBounds.push('上');
     if (x2 > video.videoWidth) outOfBounds.push('右');
     if (y2 > video.videoHeight) outOfBounds.push('下');
     if (outOfBounds.length > 0) {
-      setToastMsg(`第${index + 1}个框超出视频${outOfBounds.join('、')}边界`);
+      // debugger;
     }
   };
 
@@ -327,21 +316,6 @@ const VideoAnnotator: React.FC = () => {
     const rect = (e.target as HTMLDivElement).getBoundingClientRect();
     const pos = (e.clientX - rect.left) / rect.width;
     video.currentTime = pos * video.duration;
-  };
-
-  // Zoom controls
-  const handleWheel = (e: React.WheelEvent) => {
-    // 只有按住 Ctrl 或 Meta（Command）时才缩放
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      let nextZoom = currentZoom + (e.deltaY < 0 ? 0.1 : -0.1);
-      nextZoom = Math.max(0.5, Math.min(3, nextZoom));
-      if (nextZoom === currentZoom) {
-        setToastMsg(nextZoom === 0.5 ? '已到最小缩放' : '已到最大缩放');
-      }
-      setCurrentZoom(nextZoom);
-    }
-    // 否则让页面正常滚动
   };
 
   // 文件选择优化
@@ -384,7 +358,6 @@ const VideoAnnotator: React.FC = () => {
     setCoordinates((prev) => {
       const next = prev.filter((_, i) => i !== idx);
       setInputValue(next.map((c) => `[${c.join(',')}]`).join(','));
-      setToastMsg('已删除标注框');
       return next;
     });
   };
@@ -398,7 +371,6 @@ const VideoAnnotator: React.FC = () => {
       const zip = await JSZip.loadAsync(file);
       const npyFile = zip.file('crop_box.npy');
       if (!npyFile) {
-        setToastMsg('未找到 crop_box.npy');
         return;
       }
       const npyBuffer = await npyFile.async('arraybuffer');
@@ -419,10 +391,8 @@ const VideoAnnotator: React.FC = () => {
         const all = [...prevArr, ...coords];
         return all.map((c) => `[${c.join(',')}]`).join(',');
       });
-      setToastMsg('crop_box 解析成功');
     } catch (e) {
       console.log(e);
-      setToastMsg('npz 解析失败');
     }
   };
   const npzInputRef = useRef<HTMLInputElement>(null);
@@ -437,7 +407,6 @@ const VideoAnnotator: React.FC = () => {
       const zip = await JSZip.loadAsync(arrayBuffer);
       const npyFile = zip.file('crop_box.npy');
       if (!npyFile) {
-        setToastMsg('未找到 crop_box.npy');
         return;
       }
       const npyBuffer = await npyFile.async('arraybuffer');
@@ -457,13 +426,18 @@ const VideoAnnotator: React.FC = () => {
         const all = [...prevArr, ...coords];
         return all.map((c) => `[${c.join(',')}]`).join(',');
       });
-      setToastMsg('npz URL 解析成功');
     } catch (e: unknown) {
-      let msg = '';
-      if (e instanceof Error) msg = e.message;
-      else if (typeof e === 'string') msg = e;
-      else msg = JSON.stringify(e);
-      setToastMsg('npz URL 解析失败: ' + msg);
+      throw e;
+    }
+  };
+
+  // wheel缩放逻辑恢复
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      let nextZoom = currentZoom + (e.deltaY < 0 ? 0.1 : -0.1);
+      nextZoom = Math.max(0.2, Math.min(10, nextZoom));
+      setCurrentZoom(nextZoom);
     }
   };
 
@@ -490,6 +464,29 @@ const VideoAnnotator: React.FC = () => {
           </CardHeader>
           <CardContent className="flex flex-col items-center w-full flex-1">
             <div className="relative rounded-xl overflow-auto mb-4 w-full flex-1 flex items-center justify-center max-h-[70vh] bg-[#101014] border border-[#232329] shadow-inner scrollbar-hide">
+              {/* 悬浮操作说明Tip */}
+              <div className="absolute top-2 right-4 z-20">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="w-5 h-5 text-gray-400 hover:text-gray-200 cursor-pointer" />
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="left"
+                    className="text-xs bg-[#222] text-gray-200 border border-gray-700 max-w-xs"
+                  >
+                    <div className="mb-1">
+                      快捷键：空格播放/暂停，Delete 删除最后一个框，Ctrl+Z 撤销
+                    </div>
+                    <div className="mb-1">
+                      缩放：按住 Ctrl/Command + 滚轮，支持 0.2~10 倍，缩放以鼠标为中心
+                    </div>
+                    <div className="mb-1">
+                      红色数字表示该点超出视频边界，行尾&#34;超出边界&#34;标识
+                    </div>
+                    <div>框线、字号均可自定义，编号和圆圈大小自适应分辨率</div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <div
                 id="videoWrapper"
                 className="relative mx-auto"
@@ -676,24 +673,6 @@ const VideoAnnotator: React.FC = () => {
               </div>
               {/* 标注操作分组 */}
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Button
-                  variant="secondary"
-                  onClick={handleClear}
-                  className="bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-4"
-                  disabled={playing}
-                >
-                  清空标注
-                </Button>
-                <label className="text-xs text-gray-400 flex items-center gap-1">
-                  框颜色
-                  <input
-                    type="color"
-                    value={boxColor}
-                    onChange={(e) => setBoxColor(e.target.value)}
-                    className="w-6 h-6 border-none bg-transparent cursor-pointer"
-                    disabled={playing}
-                  />
-                </label>
                 <label className="text-xs text-gray-400 flex items-center gap-1">
                   文字颜色
                   <input
@@ -704,6 +683,68 @@ const VideoAnnotator: React.FC = () => {
                     disabled={playing}
                   />
                 </label>
+                <label className="text-xs text-gray-400 flex items-center gap-1">
+                  框颜色
+                  <input
+                    type="color"
+                    value={boxColor}
+                    onChange={(e) => setBoxColor(e.target.value)}
+                    className="w-6 h-6 border-none bg-transparent cursor-pointer"
+                    disabled={playing}
+                  />
+                </label>
+                <div className="flex items-center gap-1 ml-4">
+                  <span className="text-xs text-gray-400">字号</span>
+                  <button
+                    type="button"
+                    className="px-2 py-1 bg-[#232329] border border-[#232329] text-white rounded hover:bg-[#333]"
+                    onClick={() => setFontSize((f) => Math.max(12, f - 4))}
+                    disabled={playing}
+                  >
+                    -
+                  </button>
+                  {/* <span className="w-8 text-center">{fontSize}</span> */}
+                  <button
+                    type="button"
+                    className="px-2 py-1 bg-[#232329] border border-[#232329] text-white rounded hover:bg-[#333]"
+                    onClick={() => setFontSize((f) => Math.min(48, f + 4))}
+                    disabled={playing}
+                  >
+                    +
+                  </button>
+                </div>
+                <div className="flex items-center gap-1 ml-4">
+                  <span className="text-xs text-gray-400">框线</span>
+                  <button
+                    type="button"
+                    className="px-2 py-1 bg-[#232329] border border-[#232329] text-white rounded hover:bg-[#333]"
+                    onClick={() => setLineWidth((w) => Math.max(1, w - 2))}
+                    disabled={playing}
+                  >
+                    -
+                  </button>
+                  {/* <span className="w-8 text-center">{lineWidth}</span> */}
+                  <button
+                    type="button"
+                    className="px-2 py-1 bg-[#232329] border border-[#232329] text-white rounded hover:bg-[#333]"
+                    onClick={() => setLineWidth((w) => Math.min(10, w + 2))}
+                    disabled={playing}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* 清空标注按钮单独放下方，拉开间距 */}
+              <div className="flex flex-row items-center gap-2 mt-4">
+                <Button
+                  variant="secondary"
+                  onClick={handleClear}
+                  className="bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-4"
+                  disabled={playing}
+                >
+                  清空标注
+                </Button>
               </div>
               {error && <div className="text-red-500 text-xs mt-1">{error}</div>}
             </CardContent>
@@ -742,28 +783,48 @@ const VideoAnnotator: React.FC = () => {
                 className="h-40 rounded border border-[#232329] bg-[#232329] p-2"
               >
                 <div className="space-y-1">
+                  <div className="text-xs text-gray-400 mb-1">红色数字表示超出视频边界</div>
                   {coordinates.length === 0 && (
                     <div className="text-xs text-gray-500">暂无标注</div>
                   )}
-                  {coordinates.map((coord, idx) => (
-                    <div
-                      key={idx}
-                      className="text-xs text-cyan-400 font-mono flex items-center gap-2 group cursor-pointer"
-                      onMouseEnter={() => handleCoordMouseEnter(idx)}
-                      onMouseLeave={handleCoordMouseLeave}
-                    >
-                      框{idx + 1}: [{coord.join(', ')}]
-                      <Button
-                        variant="secondary"
-                        size="icon"
-                        className="ml-1 bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-1 py-0 h-5 w-5 opacity-0 group-hover:opacity-100 transition"
-                        onClick={() => handleDeleteCoord(idx)}
-                        tabIndex={-1}
+                  {coordinates.map((coord, idx) => {
+                    const video = videoRef.current;
+                    const pointColor: (string | undefined)[] = [
+                      undefined,
+                      undefined,
+                      undefined,
+                      undefined,
+                    ];
+                    if (video) {
+                      if (coord[0] < 0) pointColor[0] = 'red';
+                      if (coord[1] < 0) pointColor[1] = 'red';
+                      if (coord[2] > video.videoWidth) pointColor[2] = 'red';
+                      if (coord[3] > video.videoHeight) pointColor[3] = 'red';
+                    }
+                    return (
+                      <div
+                        key={idx}
+                        className="text-xs text-cyan-400 font-mono flex items-center gap-2 group cursor-pointer"
+                        onMouseEnter={() => handleCoordMouseEnter(idx)}
+                        onMouseLeave={handleCoordMouseLeave}
                       >
-                        ×
-                      </Button>
-                    </div>
-                  ))}
+                        框{idx + 1}: [
+                        <span style={{ color: pointColor[0] || undefined }}>{coord[0]}</span>,
+                        <span style={{ color: pointColor[1] || undefined }}>{coord[1]}</span>,
+                        <span style={{ color: pointColor[2] || undefined }}>{coord[2]}</span>,
+                        <span style={{ color: pointColor[3] || undefined }}>{coord[3]}</span>]
+                        <Button
+                          variant="secondary"
+                          size="icon"
+                          className="ml-1 bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-1 py-0 h-5 w-5 opacity-0 group-hover:opacity-100 transition"
+                          onClick={() => handleDeleteCoord(idx)}
+                          tabIndex={-1}
+                        >
+                          ×
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </CardContent>
