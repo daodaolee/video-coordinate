@@ -1,6 +1,7 @@
 import './globals.css';
 import { Sidebar, SidebarProvider, SidebarRail } from '@/components/ui/sidebar';
 import Link from 'next/link';
+import { Analytics } from '@vercel/analytics/next';
 
 export default function RootLayout({
   children,
@@ -33,6 +34,7 @@ export default function RootLayout({
           </div>
         </SidebarProvider>
       </body>
+      <Analytics />
     </html>
   );
 }
