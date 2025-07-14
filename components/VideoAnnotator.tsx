@@ -63,11 +63,11 @@ const VideoAnnotator: React.FC = () => {
       npzIndex: number;
     }[]
   >([]);
-  // boxes 只用于渲染
+  // boxes 只用于渲染，增加 _originIdx 字段
   const boxes = [
-    ...npzBoxes.map((b) => ({ ...b, type: 'npz' as const })),
-    ...manualBoxes.map((b) => ({ ...b, type: 'manual' as const })),
-    ...drawBoxes.map((b) => ({ ...b, type: 'draw' as const })),
+    ...npzBoxes.map((b, i) => ({ ...b, type: 'npz' as const, _originIdx: i })),
+    ...manualBoxes.map((b, i) => ({ ...b, type: 'manual' as const, _originIdx: i })),
+    ...drawBoxes.map((b, i) => ({ ...b, type: 'draw' as const, _originIdx: i })),
   ];
   // 手动输入面板 inputValue 只和 manualBoxes 相关
   const [inputValue, setInputValue] = useState('');
@@ -120,7 +120,11 @@ const VideoAnnotator: React.FC = () => {
       setCurrentTime(video.currentTime);
       setVideoLoading(false);
     };
-    const onSeeking = () => setVideoLoading(true);
+    const onSeeking = () => {
+      setVideoLoading(true);
+      setPlaying(false);
+      video.pause();
+    };
     const onSeeked = () => setVideoLoading(false);
     const onLoadStart = () => setVideoLoading(true);
     video.addEventListener('timeupdate', onTimeUpdate);
@@ -293,11 +297,11 @@ const VideoAnnotator: React.FC = () => {
         handlePlayPause();
       } else if (e.code === 'Delete') {
         if (boxes.length > 0) {
-          handleDeleteCoord(boxes.length - 1);
+          handleDeleteCoord(boxes[boxes.length - 1].type, boxes[boxes.length - 1]._originIdx);
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         if (boxes.length > 0) {
-          handleDeleteCoord(boxes.length - 1);
+          handleDeleteCoord(boxes[boxes.length - 1].type, boxes[boxes.length - 1]._originIdx);
         }
       }
     };
@@ -488,16 +492,13 @@ const VideoAnnotator: React.FC = () => {
   }, [currentZoom]);
 
   // 删除单个框
-  const handleDeleteCoord = (idx: number) => {
-    // idx 在 boxes 中，需判断属于哪类
-    if (idx < npzBoxes.length) {
-      setNpzBoxes((prev) => prev.filter((_, i) => i !== idx));
-    } else if (idx < npzBoxes.length + manualBoxes.length) {
-      setManualBoxes((prev) => prev.filter((_, i) => i !== idx - npzBoxes.length));
-    } else {
-      setDrawBoxes((prev) =>
-        prev.filter((_, i) => i !== idx - npzBoxes.length - manualBoxes.length),
-      );
+  const handleDeleteCoord = (type: 'npz' | 'manual' | 'draw', originIdx: number) => {
+    if (type === 'npz') {
+      setNpzBoxes((prev) => prev.filter((_, i) => i !== originIdx));
+    } else if (type === 'manual') {
+      setManualBoxes((prev) => prev.filter((_, i) => i !== originIdx));
+    } else if (type === 'draw') {
+      setDrawBoxes((prev) => prev.filter((_, i) => i !== originIdx));
     }
   };
 
@@ -573,7 +574,10 @@ const VideoAnnotator: React.FC = () => {
         ),
       );
       // 更新全局boxes，先移除所有type:npz且npzIndex为idx的，再加上新解析的
-      setNpzBoxes((prev) => [...prev, ...coords.map((c) => ({ coords: c, npzIndex: idx }))]);
+      setNpzBoxes((prev) => [
+        ...prev.filter((b) => b.npzIndex !== idx),
+        ...coords.map((c) => ({ coords: c, npzIndex: idx })),
+      ]);
     } catch (e) {
       // 可加错误提示
     }
@@ -581,16 +585,22 @@ const VideoAnnotator: React.FC = () => {
   // 2. npz面板每项清空本项标注
   const handleClearNpzItem = (idx: number) => {
     setNpzItems((prev) => prev.map((it, i) => (i === idx ? { ...it, boxes: [] } : it)));
-    setNpzBoxes((prev) => prev.filter((b) => !(b.npzIndex === idx)));
+    setNpzBoxes((prev) => prev.filter((b) => b.npzIndex !== idx));
   };
   // 3. 删除npz项时同步清空boxes
   const handleRemoveNpzItem = (id: string) => {
-    setNpzItems((prev) => prev.filter((item) => item.id !== id));
-    // 找到idx
+    // 找到要删除的 idx
     const idx = npzItems.findIndex((item) => item.id === id);
-    if (idx !== -1) {
-      setNpzBoxes((prev) => prev.filter((b) => !(b.npzIndex === idx)));
-    }
+    if (idx === -1) return;
+    // 删除 npzItems 该项
+    setNpzItems((prev) => prev.filter((item) => item.id !== id));
+    // 删除 npzBoxes 里 npzIndex === idx 的框，并重排剩余 npzBoxes 的 npzIndex
+    setNpzBoxes((prev) => {
+      // 先过滤掉要删除的
+      const filtered = prev.filter((b) => b.npzIndex !== idx);
+      // idx 之后的 npzIndex 需要 -1
+      return filtered.map((b) => (b.npzIndex > idx ? { ...b, npzIndex: b.npzIndex - 1 } : b));
+    });
   };
   const handleNpzTypeChange = (id: string, type: 'file' | 'url') => {
     setNpzItems((prev) =>
@@ -660,7 +670,10 @@ const VideoAnnotator: React.FC = () => {
             ),
           );
           // 更新全局boxes，先移除所有type:npz且npzIndex为idx的，再加上新解析的
-          setNpzBoxes((prev) => [...prev, ...coords.map((c) => ({ coords: c, npzIndex: idx }))]);
+          setNpzBoxes((prev) => [
+            ...prev.filter((b) => b.npzIndex !== idx),
+            ...coords.map((c) => ({ coords: c, npzIndex: idx })),
+          ]);
         } catch (e) {
           // 可加错误提示
         }
@@ -1055,7 +1068,7 @@ const VideoAnnotator: React.FC = () => {
                         >
                           {item.file ? item.file.name : '选择文件'}
                         </Button>
-                        {item.file && (
+                        {/* {item.file && (
                           <Button
                             variant="ghost"
                             className="px-2 py-1 text-xs"
@@ -1063,7 +1076,7 @@ const VideoAnnotator: React.FC = () => {
                           >
                             ×
                           </Button>
-                        )}
+                        )} */}
                       </>
                     ) : (
                       <Input
@@ -1374,7 +1387,7 @@ const VideoAnnotator: React.FC = () => {
                           variant="secondary"
                           size="icon"
                           className="ml-1 bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-1 py-0 h-5 w-5 opacity-0 group-hover:opacity-100 transition"
-                          onClick={() => handleDeleteCoord(idx)}
+                          onClick={() => handleDeleteCoord(box.type, box._originIdx)}
                           tabIndex={-1}
                         >
                           ×
