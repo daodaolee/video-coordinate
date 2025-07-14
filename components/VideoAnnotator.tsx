@@ -1330,7 +1330,7 @@ const VideoAnnotator: React.FC = () => {
                     let color = '';
                     if (box.type === 'npz') {
                       prefix = 'N';
-                      color = getNpzBoxColor(box.npzIndex ?? 0);
+                      color = npzBoxColor;
                     } else if (box.type === 'manual') {
                       prefix = 'M';
                       color = manualBoxColor;
@@ -1338,10 +1338,7 @@ const VideoAnnotator: React.FC = () => {
                       prefix = 'D';
                       color = drawBoxColor;
                     }
-                    let textColor = '#fff';
-                    if (box.type === 'npz') textColor = npzTextColor;
-                    else if (box.type === 'manual') textColor = manualTextColor;
-                    else if (box.type === 'draw') textColor = drawTextColor;
+
                     return (
                       <div
                         key={idx}
@@ -1374,8 +1371,8 @@ const VideoAnnotator: React.FC = () => {
                         <span
                           className="ml-2 px-1 py-0.5 rounded text-[10px] flex items-center justify-center"
                           style={{
+                            display: 'block',
                             background: color + 'B3', // 70% 透明度
-                            color: textColor, // 文本色用各自类型的字色
                             fontWeight: 500,
                             borderRadius: '50%',
                             width: 15,
