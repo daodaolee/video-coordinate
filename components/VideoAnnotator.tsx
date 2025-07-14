@@ -54,10 +54,22 @@ const VideoAnnotator: React.FC = () => {
   // 1. state
   const [videoLoading, setVideoLoading] = useState(false);
 
-  // 框数据
-  const [boxes, setBoxes] = useState<
-    { coords: number[]; type: 'npz' | 'manual' | 'draw'; npzIndex?: number }[]
+  // 替换 boxes state
+  const [manualBoxes, setManualBoxes] = useState<{ coords: number[] }[]>([]);
+  const [drawBoxes, setDrawBoxes] = useState<{ coords: number[] }[]>([]);
+  const [npzBoxes, setNpzBoxes] = useState<
+    {
+      coords: number[];
+      npzIndex: number;
+    }[]
   >([]);
+  // boxes 只用于渲染
+  const boxes = [
+    ...npzBoxes.map((b) => ({ ...b, type: 'npz' as const })),
+    ...manualBoxes.map((b) => ({ ...b, type: 'manual' as const })),
+    ...drawBoxes.map((b) => ({ ...b, type: 'draw' as const })),
+  ];
+  // 手动输入面板 inputValue 只和 manualBoxes 相关
   const [inputValue, setInputValue] = useState('');
 
   // npz面板数据（每项本地/链接二选一，含样式）
@@ -357,16 +369,7 @@ const VideoAnnotator: React.FC = () => {
       return; // 忽略过小的框
     }
     const newCoord = [Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2)];
-    setBoxes((prev) => {
-      const next = [...prev, { coords: newCoord, type: 'draw' as const }];
-      setInputValue(next.map((b) => `[${b.coords.join(',')}]`).join(','));
-      // 自动滚动到新坐标
-      setTimeout(() => {
-        const list = document.getElementById('coord-list-scroll');
-        if (list) list.scrollTop = list.scrollHeight;
-      }, 100);
-      return next;
-    });
+    setDrawBoxes((prev) => [...prev, { coords: newCoord }]);
     setStart(null);
   };
 
@@ -410,11 +413,8 @@ const VideoAnnotator: React.FC = () => {
   const handleDrawFromInput = () => {
     const coords = parseCoordinates(inputValue);
     coords.forEach(checkBounds);
-    setBoxes((prev) => {
-      const next = [...prev, ...coords.map((c) => ({ coords: c, type: 'manual' as const }))];
-      setInputValue(next.map((b) => `[${b.coords.join(',')}]`).join(','));
-      return next;
-    });
+    setManualBoxes((prev) => [...prev, ...coords.map((c) => ({ coords: c }))]);
+    setInputValue('');
   };
 
   // Check bounds
@@ -489,11 +489,16 @@ const VideoAnnotator: React.FC = () => {
 
   // 删除单个框
   const handleDeleteCoord = (idx: number) => {
-    setBoxes((prev) => {
-      const next = prev.filter((_, i) => i !== idx);
-      setInputValue(next.map((b) => `[${b.coords.join(',')}]`).join(','));
-      return next;
-    });
+    // idx 在 boxes 中，需判断属于哪类
+    if (idx < npzBoxes.length) {
+      setNpzBoxes((prev) => prev.filter((_, i) => i !== idx));
+    } else if (idx < npzBoxes.length + manualBoxes.length) {
+      setManualBoxes((prev) => prev.filter((_, i) => i !== idx - npzBoxes.length));
+    } else {
+      setDrawBoxes((prev) =>
+        prev.filter((_, i) => i !== idx - npzBoxes.length - manualBoxes.length),
+      );
+    }
   };
 
   // 播放/暂停按钮和进度条禁用逻辑
@@ -568,10 +573,7 @@ const VideoAnnotator: React.FC = () => {
         ),
       );
       // 更新全局boxes，先移除所有type:npz且npzIndex为idx的，再加上新解析的
-      setBoxes((prev) => [
-        ...prev.filter((b) => !(b.type === 'npz' && b.npzIndex === idx)),
-        ...coords.map((c) => ({ coords: c, type: 'npz' as const, npzIndex: idx })),
-      ]);
+      setNpzBoxes((prev) => [...prev, ...coords.map((c) => ({ coords: c, npzIndex: idx }))]);
     } catch (e) {
       // 可加错误提示
     }
@@ -579,7 +581,7 @@ const VideoAnnotator: React.FC = () => {
   // 2. npz面板每项清空本项标注
   const handleClearNpzItem = (idx: number) => {
     setNpzItems((prev) => prev.map((it, i) => (i === idx ? { ...it, boxes: [] } : it)));
-    setBoxes((prev) => prev.filter((b) => !(b.type === 'npz' && b.npzIndex === idx)));
+    setNpzBoxes((prev) => prev.filter((b) => !(b.npzIndex === idx)));
   };
   // 3. 删除npz项时同步清空boxes
   const handleRemoveNpzItem = (id: string) => {
@@ -587,7 +589,7 @@ const VideoAnnotator: React.FC = () => {
     // 找到idx
     const idx = npzItems.findIndex((item) => item.id === id);
     if (idx !== -1) {
-      setBoxes((prev) => prev.filter((b) => !(b.type === 'npz' && b.npzIndex === idx)));
+      setNpzBoxes((prev) => prev.filter((b) => !(b.npzIndex === idx)));
     }
   };
   const handleNpzTypeChange = (id: string, type: 'file' | 'url') => {
@@ -658,10 +660,7 @@ const VideoAnnotator: React.FC = () => {
             ),
           );
           // 更新全局boxes，先移除所有type:npz且npzIndex为idx的，再加上新解析的
-          setBoxes((prev) => [
-            ...prev.filter((b) => !(b.type === 'npz' && b.npzIndex === idx)),
-            ...coords.map((c) => ({ coords: c, type: 'npz' as const, npzIndex: idx })),
-          ]);
+          setNpzBoxes((prev) => [...prev, ...coords.map((c) => ({ coords: c, npzIndex: idx }))]);
         } catch (e) {
           // 可加错误提示
         }
@@ -672,20 +671,15 @@ const VideoAnnotator: React.FC = () => {
         ((item.type === 'file' && !item.file) || (item.type === 'url' && !item.url))
       ) {
         setNpzItems((prev) => prev.map((it, i) => (i === idx ? { ...it, boxes: [] } : it)));
-        setBoxes((prev) => prev.filter((b) => !(b.type === 'npz' && b.npzIndex === idx)));
+        setNpzBoxes((prev) => prev.filter((b) => !(b.npzIndex === idx)));
       }
     });
   }, [npzItems]);
 
   // inputValue 只反映 type: 'manual' 的框
   useEffect(() => {
-    setInputValue(
-      boxes
-        .filter((b) => b.type === 'manual')
-        .map((b) => `[${b.coords.join(',')}]`)
-        .join(','),
-    );
-  }, [boxes]);
+    setInputValue(manualBoxes.map((b) => `[${b.coords.join(',')}]`).join(','));
+  }, [manualBoxes]);
 
   // npz面板顶部批量导入Dialog
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
@@ -1104,10 +1098,7 @@ const VideoAnnotator: React.FC = () => {
                 variant="secondary"
                 className="bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-4"
                 onClick={() => {
-                  setNpzItems((prev) =>
-                    prev.map((it) => ({ ...it, boxes: [], file: undefined, url: '' })),
-                  );
-                  setBoxes((prev) => prev.filter((b) => b.type !== 'npz'));
+                  setNpzBoxes([]);
                 }}
               >
                 清空npz框
@@ -1189,7 +1180,7 @@ const VideoAnnotator: React.FC = () => {
               <Button
                 variant="secondary"
                 className="bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-4"
-                onClick={() => setBoxes((prev) => prev.filter((b) => b.type !== 'manual'))}
+                onClick={() => setManualBoxes([])}
               >
                 清空手动输入框
               </Button>
@@ -1269,7 +1260,7 @@ const VideoAnnotator: React.FC = () => {
               <Button
                 variant="secondary"
                 className="bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-4 mt-2"
-                onClick={() => setBoxes((prev) => prev.filter((b) => b.type !== 'draw'))}
+                onClick={() => setDrawBoxes([])}
               >
                 清空手动画框
               </Button>
