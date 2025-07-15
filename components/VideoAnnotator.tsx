@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Info, RotateCcw, Play, Pause } from 'lucide-react';
+import { Info, RotateCcw, Play, Pause, AlertCircleIcon, PopcornIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import JSZip from 'jszip';
 import NPYJS from 'npyjs';
@@ -27,6 +27,8 @@ import {
 } from '@/components/ui/dialog';
 import { useAnimationFrame } from 'framer-motion';
 import { SelectValue } from '@radix-ui/react-select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const formatTime = (seconds: number) => {
   const mins = Math.floor(seconds / 60);
@@ -147,7 +149,7 @@ const VideoAnnotator: React.FC = () => {
   // 2. 彩虹动画驱动
   useAnimationFrame(() => {
     if (rainbowActive) {
-      setRainbowHue((h) => (h + 2) % 360);
+      setRainbowHue((h) => (h + 6) % 360); // 步进值从2提升到6，动效更快
     }
   });
 
@@ -160,6 +162,7 @@ const VideoAnnotator: React.FC = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     // 3. drawCoordinates 里高亮框线条用彩虹色
     boxes.forEach((box, idx) => {
+      if (!box.coords || box.coords.length !== 4) return; // 跳过无效框
       let stroke = '#22d3ee'; // Default to manual color
       let fill = '#22d3ee'; // Default to manual color
       let font = '18px Arial'; // Default to manual font size
@@ -228,7 +231,6 @@ const VideoAnnotator: React.FC = () => {
       ctx.textBaseline = 'middle';
       // 主npz加字样
       const label = labelPrefix + (idx + 1);
-      // if (box.type === 'npz' && box.npzIndex === 0) label = `主npz`;
       ctx.fillText(label, centerX, centerY);
       ctx.textAlign = 'start';
       ctx.textBaseline = 'alphabetic';
@@ -675,7 +677,10 @@ const VideoAnnotator: React.FC = () => {
             ...coords.map((c) => ({ coords: c, npzIndex: idx })),
           ]);
         } catch (e) {
-          // 可加错误提示
+          console.error('npz解析失败', item, e);
+          // 过滤掉当前项
+          setNpzItems((prev) => prev.filter((_, i) => i !== idx));
+          setNpzBoxes((prev) => prev.filter((b) => b.npzIndex !== idx));
         }
       }
       // 如果file/url被清空，自动移除boxes
@@ -697,6 +702,9 @@ const VideoAnnotator: React.FC = () => {
   // npz面板顶部批量导入Dialog
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [batchInput, setBatchInput] = useState('');
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const [importMode, setImportMode] = useState<'link' | 'file'>('link');
+
   const handleBatchImport = () => {
     let urls: string[] = [];
     try {
@@ -931,37 +939,143 @@ const VideoAnnotator: React.FC = () => {
               <div className="flex items-center gap-2 mb-2">
                 {/* 样式设置区 */}
                 <Dialog open={batchDialogOpen} onOpenChange={setBatchDialogOpen}>
-                  <DialogContent className="bg-[#18181b] border border-[#232329] text-white max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>批量导入npz链接</DialogTitle>
-                    </DialogHeader>
-                    <div className="text-xs text-gray-400 mb-2">
-                      支持多种格式：
-                      <br />
-                      1. 每行一个链接
-                      <br />
-                      2. 用逗号分隔的链接
-                      <br />
-                      3.{' '}
-                      <span className="font-mono">
-                        [&quot;url1&quot;, &quot;url2&quot;, ...]
-                      </span>{' '}
-                      形式的JSON数组
-                    </div>
-                    <textarea
-                      className="w-full min-h-[100px] bg-[#232329] border border-[#232329] text-white rounded p-2 text-sm mb-2"
-                      placeholder="每行一个链接或用逗号分隔"
-                      value={batchInput}
-                      onChange={(e) => setBatchInput(e.target.value)}
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="secondary" onClick={() => setBatchDialogOpen(false)}>
+                  <DialogContent className="bg-[#1e1e22] border border-[#232329] text-[#8b8b8d] w-[700px] min-w-[400px] min-h-[420px] p-8">
+                    {/* <DialogHeader>
+                      <DialogTitle>批量导入npz</DialogTitle>
+                    </DialogHeader> */}
+                    <Tabs
+                      value={importMode}
+                      onValueChange={(val) => setImportMode(val as 'link' | 'file')}
+                      className="w-full"
+                    >
+                      <TabsList className="mb-2 bg-[#18181b] rounded-lg flex">
+                        <TabsTrigger
+                          value="link"
+                          className="flex-1 px-4 py-2 rounded-l-lg data-[state=active]:bg-[#232329] data-[state=active]:text-white data-[state=inactive]:bg-[#18181b] data-[state=inactive]:text-[#8b8b8d] transition-colors"
+                        >
+                          批量链接导入
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="file"
+                          className="flex-1 px-4 py-2 rounded-r-lg data-[state=active]:bg-[#232329] data-[state=active]:text-white data-[state=inactive]:bg-[#18181b] data-[state=inactive]:text-[#8b8b8d] transition-colors"
+                        >
+                          批量本地文件导入
+                        </TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="link">
+                        <div className="flex flex-col">
+                          <Alert className="bg-[#18181b] text-[#8b8b8d] border-none mb-4">
+                            <PopcornIcon stroke="white" />
+                            <AlertTitle className="text-white">支持多种格式：</AlertTitle>
+                            <AlertDescription>
+                              <ul className="list-inside list-disc text-sm flex flex-col gap-2 py-2">
+                                <li>单个链接</li>
+                                <li>用逗号分隔的链接</li>
+                                <li>
+                                  <code className="bg-[#232329] text-white relative rounded  font-mono text-sm ">
+                                    [&quot;url1&quot;, &quot;url2&quot;, ...]
+                                  </code>
+                                  &nbsp; 形式的JSON数组
+                                </li>
+                              </ul>
+                            </AlertDescription>
+                          </Alert>
+                          <textarea
+                            className="w-full min-h-[100px] bg-[#232329] border border-[#232329] text-white rounded p-2 text-sm mb-4"
+                            placeholder="每行一个链接或用逗号分隔"
+                            value={batchInput}
+                            onFocus={() => setImportMode('link')}
+                            onChange={(e) => {
+                              setBatchInput(e.target.value);
+                              setImportMode('link');
+                            }}
+                          />
+                        </div>
+                      </TabsContent>
+                      <TabsContent value="file">
+                        <div className="flex flex-col min-h-[280px]">
+                          <div className="text-xs text-gray-400 mb-2"></div>
+                          <Alert className="bg-[#18181b] text-[#8b8b8d] border-none mb-4">
+                            <PopcornIcon stroke="white" />
+                            <AlertTitle className="text-white">可一次选择多个 .npz 文件</AlertTitle>
+                          </Alert>
+                          <input
+                            type="file"
+                            accept=".npz"
+                            multiple
+                            id="batch-npz-file-input"
+                            className="hidden"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              setBatchFiles(files);
+                              setImportMode('file');
+                            }}
+                          />
+                          <Button
+                            variant="secondary"
+                            className="mb-2 w-fit bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-4"
+                            onClick={() => {
+                              document.getElementById('batch-npz-file-input')?.click();
+                              setImportMode('file');
+                            }}
+                          >
+                            选择文件
+                          </Button>
+                          <div className="flex flex-col gap-1 mb-4 max-h-40 overflow-y-auto rounded bg-[#232329] px-2 py-1">
+                            {batchFiles && batchFiles.length > 0 ? (
+                              batchFiles.map((file, idx) => (
+                                <div
+                                  key={idx}
+                                  className="text-xs text-gray-200 truncate flex-1 shrink-0"
+                                >
+                                  {file.name}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-xs text-gray-500">未选择文件</div>
+                            )}
+                          </div>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                    <div className="flex gap-2 justify-end mt-6">
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setBatchDialogOpen(false);
+                          setBatchInput('');
+                          setBatchFiles([]);
+                          setImportMode('link');
+                        }}
+                      >
                         取消
                       </Button>
                       <Button
                         variant="secondary"
-                        onClick={handleBatchImport}
-                        disabled={!batchInput.trim()}
+                        onClick={() => {
+                          if (importMode === 'link') {
+                            handleBatchImport();
+                          } else if (importMode === 'file') {
+                            if (!batchFiles || batchFiles.length === 0) return;
+                            setNpzItems((prev) => [
+                              ...prev,
+                              ...batchFiles.map((file) => ({
+                                id: Math.random().toString(36).slice(2),
+                                type: 'file' as const,
+                                file,
+                                boxes: [],
+                              })),
+                            ]);
+                            setBatchDialogOpen(false);
+                            setBatchFiles([]);
+                            setImportMode('link');
+                          }
+                        }}
+                        disabled={
+                          importMode === 'link'
+                            ? !batchInput.trim()
+                            : !batchFiles || batchFiles.length === 0
+                        }
                       >
                         导入
                       </Button>
@@ -1017,89 +1131,87 @@ const VideoAnnotator: React.FC = () => {
                   +
                 </button>
               </div>
-              {npzItems.map((item, idx) => (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-2 border-b border-[#232329] pb-2 mb-2"
-                >
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={item.type}
-                      onValueChange={(val) => handleNpzTypeChange(item.id, val as 'file' | 'url')}
-                    >
-                      <SelectTrigger className="w-12 border-0">
-                        <SelectValue>
-                          {item.type === 'file' ? (
-                            <File className="inline text-white" />
-                          ) : (
-                            <Link2 className="inline text-white" />
-                          )}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#18181b] text-white border-0">
-                        <SelectItem value="file">
-                          <File className="inline " />
-                          <span>文件</span>
-                        </SelectItem>
-                        <SelectItem value="url">
-                          <Link2 className="inline" />
-                          <span>链接</span>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {item.type === 'file' ? (
-                      <>
-                        <input
-                          type="file"
-                          accept=".npz"
-                          id={`npz-file-input-${item.id}`}
-                          className="hidden"
-                          onChange={(ev) => {
-                            const file = ev.target.files?.[0];
-                            if (file) handleNpzFileChange(item.id, file);
-                          }}
-                        />
-                        <Button
-                          variant="secondary"
-                          className="px-3 py-1 text-xs w-[287px]"
-                          onClick={() =>
-                            document.getElementById(`npz-file-input-${item.id}`)?.click()
-                          }
-                        >
-                          {item.file ? item.file.name : '选择文件'}
-                        </Button>
-                        {/* {item.file && (
+              {npzItems.map((item, idx) => {
+                const isInvalid =
+                  !item.boxes.length || item.boxes.every((b) => !b.coords || b.coords.length !== 4);
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex flex-col gap-2 border-b border-[#232329] pb-2 mb-2 ${isInvalid ? 'border-red-500 bg-[#2a1a1a]' : ''}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={item.type}
+                        onValueChange={(val) => handleNpzTypeChange(item.id, val as 'file' | 'url')}
+                      >
+                        <SelectTrigger className="w-12 border-0">
+                          <SelectValue>
+                            {item.type === 'file' ? (
+                              <File className="inline text-white" />
+                            ) : (
+                              <Link2 className="inline text-white" />
+                            )}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="bg-[#18181b] text-white border-0">
+                          <SelectItem value="file">
+                            <File className="inline " />
+                            <span>文件</span>
+                          </SelectItem>
+                          <SelectItem value="url">
+                            <Link2 className="inline" />
+                            <span>链接</span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {item.type === 'file' ? (
+                        <>
+                          <input
+                            type="file"
+                            accept=".npz"
+                            id={`npz-file-input-${item.id}`}
+                            className="hidden"
+                            onChange={(ev) => {
+                              const file = ev.target.files?.[0];
+                              if (file) handleNpzFileChange(item.id, file);
+                            }}
+                          />
                           <Button
-                            variant="ghost"
-                            className="px-2 py-1 text-xs"
-                            onClick={() => handleNpzFileChange(item.id, null)}
+                            variant="secondary"
+                            className="px-3 py-1 text-xs w-[287px]"
+                            onClick={() =>
+                              document.getElementById(`npz-file-input-${item.id}`)?.click()
+                            }
                           >
-                            ×
+                            {item.file ? item.file.name : '选择文件'}
                           </Button>
-                        )} */}
-                      </>
-                    ) : (
-                      <Input
-                        type="text"
-                        className="text-sm bg-[#232329] border border-[#232329] text-white placeholder:text-gray-500 flex-1"
-                        placeholder="npz文件URL"
-                        value={item.url || ''}
-                        onChange={(e) => handleNpzUrlChange(item.id, e.target.value)}
-                        disabled={item.boxes.length > 0}
-                      />
+                        </>
+                      ) : (
+                        <Input
+                          type="text"
+                          className="text-sm bg-[#232329] border border-[#232329] text-white placeholder:text-gray-500 flex-1"
+                          placeholder="npz文件URL"
+                          value={item.url || ''}
+                          onChange={(e) => handleNpzUrlChange(item.id, e.target.value)}
+                          disabled={item.boxes.length > 0}
+                        />
+                      )}
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        className="bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-1 py-0 h-5 w-5"
+                        onClick={() => handleRemoveNpzItem(item.id)}
+                        tabIndex={-1}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                    {isInvalid && (
+                      <div className="text-xs text-red-500 mt-1">解析失败：无有效坐标</div>
                     )}
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      className="bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-1 py-0 h-5 w-5"
-                      onClick={() => handleRemoveNpzItem(item.id)}
-                      tabIndex={-1}
-                    >
-                      ×
-                    </Button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <Button
                 variant="secondary"
                 className="bg-black text-gray-400 hover:bg-[#18181b] border border-[#232329] px-4"
