@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Video Player</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 24px;
+        }
+
+        #video-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2px;
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 20px;
+            background: #f5f5f5;
+        }
+
+        .video-wrapper {
+            flex: 1;
+            min-width: 300px;
+            width: calc(50% - 1px);
+            background: black;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-player {
+            width: 100%;
+            height: auto;
+            display: block;
+            margin: 0;
+            padding: 0;
+            object-fit: cover;
+            background: black;
+        }
+
+        .video-name {
+            padding: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            background: #f8f8f8;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .video-info {
+            padding: 10px;
+            background: white;
+            margin-top: 5px;
+            border-radius: 4px;
+        }
+
+        #control-panel {
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: auto;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .timestamp {
+            font-family: monospace;
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            margin: 5px 0;
+        }
+
+        .frame-controls {
+            position: absolute;
+            right: 10px;
+            bottom: 40px;
+            display: flex;
+            gap: 5px;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
+            z-index: 10;
+        }
+
+        .frame-btn {
+            padding: 4px 8px;
+            font-size: 12px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .frame-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .timestamp {
+            font-family: monospace;
+            font-size: 14px;
+            color: white;
+            margin: 0 10px;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-input-label {
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .file-input-label:hover {
+            background: #218838;
+        }
+
+        input[type="url"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 300px;
+            max-width: 100%;
+        }
+
+        #progress-container {
+            width: 100%;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+
+        #progress-bar {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #ddd;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        #progress-bar::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #007bff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .video-wrapper {
+                width: 100%;
+                max-width: 100%;
+            }
+            
+            #video-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Web Video Player：仅支持两个视频操作</h1>
+
+    <div id="video-container"></div>
+
+    <div id="control-panel">
+        <div class="controls">
+            <label class="file-input-label">
+                选择视频文件
+                <input type="file" id="file-input" accept="video/*" multiple>
+            </label>
+            <input type="url" id="url-input" placeholder="输入视频URL">
+            <button id="load-url-btn">加载URL</button>
+            <button id="play-pause-btn">播放/暂停</button>
+            <button id="slow1x-btn">0.5x 速度</button>
+            <button id="slow2x-btn">0.25x 速度</button>
+            <button id="sync-btn">同步视频</button>
+            <button id="reset-btn">重置</button>
+        </div>
+        <div id="progress-container">
+            <input type="range" id="progress-bar" value="0" max="100">
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const urlInput = document.getElementById('url-input');
+        const loadUrlBtn = document.getElementById('load-url-btn');
+        const videoContainer = document.getElementById('video-container');
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const slow1xBtn = document.getElementById('slow1x-btn');
+        const slow2xBtn = document.getElementById('slow2x-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const progressBar = document.getElementById('progress-bar');
+        const syncBtn = document.getElementById('sync-btn');
+
+        let videos = [];
+        let playing = false;
+        let currentSpeed = 1.0;
+        let dragging = false;
+
+        // 假设视频帧率为30fps
+        const FRAME_DURATION = 1 / 30;
+
+        function formatTimestamp(seconds) {
+            const date = new Date(seconds * 1000);
+            const hours = date.getUTCHours().toString().padStart(2, '0');
+            const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+            const secs = date.getUTCSeconds().toString().padStart(2, '0');
+            const ms = date.getUTCMilliseconds().toString().padStart(3, '0');
+            return `${hours}:${minutes}:${secs}.${ms}`;
+        }
+
+        function updateTimestamp() {
+            if (videos.length > 0) {
+                const timestampEl = document.querySelector('.timestamp');
+                if (timestampEl) {
+                    timestampEl.textContent = formatTimestamp(videos[0].currentTime);
+                }
+            }
+        }
+
+        fileInput.addEventListener('change', (event) => {
+            const files = event.target.files;
+            if (videos.length + files.length > 2) {
+                alert('最多只能添加两个视频');
+                return;
+            }
+            for (const file of files) {
+                const videoUrl = URL.createObjectURL(file);
+                addVideoElement(videoUrl, file.name, file.size);
+            }
+            progressBar.max = 100;
+        });
+
+        loadUrlBtn.addEventListener('click', () => {
+            const url = urlInput.value.trim();
+            if (url) {
+                if (videos.length >= 2) {
+                    alert('最多只能添加两个视频');
+                    return;
+                }
+                addVideoElement(url, decodeURIComponent(url.split('/').pop()));
+                urlInput.value = '';
+            }
+        });
+
+        playPauseBtn.addEventListener('click', () => {
+            if (playing) {
+                pauseVideos();
+            } else {
+                playVideos();
+            }
+        });
+
+        slow1xBtn.addEventListener('click', () => {
+            setPlaybackSpeed(0.5);
+        });
+
+        slow2xBtn.addEventListener('click', () => {
+            setPlaybackSpeed(0.25);
+        });
+
+        resetBtn.addEventListener('click', () => {
+            resetVideos();
+        });
+
+        progressBar.addEventListener('input', () => {
+            dragging = true;
+            const progress = progressBar.value;
+            const duration = videos[0]?.duration || 0;
+            const time = (progress / 100) * duration;
+            videos.forEach(video => {
+                video.currentTime = time;
+            });
+        });
+
+        progressBar.addEventListener('change', () => {
+            dragging = false;
+            if (playing) {
+                playVideos();
+            }
+        });
+
+        syncBtn.addEventListener('click', () => {
+            if (videos.length > 1) {
+                const targetTime = videos[0].currentTime;
+                videos.slice(1).forEach(video => {
+                    video.currentTime = targetTime;
+                });
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (videos.length === 0) return;
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                    if (e.ctrlKey) {
+                        prevFrame();
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (e.ctrlKey) {
+                        nextFrame();
+                    }
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    playPauseBtn.click();
+                    break;
+                case 's':
+                    if (e.ctrlKey) {
+                        e.preventDefault();
+                        syncBtn.click();
+                    }
+                    break;
+            }
+        });
+
+        async function getFileSize(url) {
+            try {
+                // 如果是Blob URL（本地文件），直接返回undefined
+                if (url.startsWith('blob:')) {
+                    return undefined;
+                }
+                
+                const response = await fetch(url, { 
+                    method: 'HEAD',
+                    mode: 'cors',
+                    credentials: 'omit'
+                });
+                
+                const contentLength = response.headers.get('content-length');
+                if (!contentLength) {
+                    console.log('Server did not provide content length');
+                    return undefined;
+                }
+                
+                return parseInt(contentLength);
+            } catch (error) {
+                console.error('Error getting file size:', error);
+                return undefined;
+            }
+        }
+
+        function addVideoElement(src, name, knownSize) {
+            const videoWrapper = document.createElement('div');
+            videoWrapper.className = 'video-wrapper';
+
+            const videoName = document.createElement('div');
+            videoName.className = 'video-name';
+            videoName.title = name;
+            videoName.textContent = name;
+
+            const videoElement = document.createElement('video');
+            videoElement.className = 'video-player';
+            videoElement.src = src;
+            videoElement.controls = true;
+            videoElement.addEventListener('timeupdate', () => {
+                updateProgressBar();
+                updateTimestamp();
+            });
+
+            // 只在第一个视频上添加帧控制
+            if (videos.length === 0) {
+                const frameControls = document.createElement('div');
+                frameControls.className = 'frame-controls';
+                frameControls.innerHTML = `
+                    <button class="frame-btn" onclick="prevFrame()">上一帧</button>
+                    <span class="timestamp">00:00:00.000</span>
+                    <button class="frame-btn" onclick="nextFrame()">下一帧</button>
+                `;
+                videoWrapper.appendChild(frameControls);
+            }
+
+            const videoInfo = document.createElement('div');
+            videoInfo.className = 'video-info';
+            videoInfo.innerHTML = '<div class="loading">加载视频信息中...</div>';
+
+            videoWrapper.appendChild(videoName);
+            videoWrapper.appendChild(videoElement);
+            videoWrapper.appendChild(videoInfo);
+            videoContainer.appendChild(videoWrapper);
+            videos.push(videoElement);
+
+            // 等待视频元数据加载完成
+            videoElement.addEventListener('loadedmetadata', async () => {
+                const fileSize = knownSize || await getFileSize(src);
+                updateVideoInfo(videoElement, videoInfo, fileSize);
+                adjustVideoAspectRatio(videoElement);
+                adjustVideoSize(videoElement);
+            });
+        }
+
+        function updateProgressBar() {
+            if (!dragging && videos.length > 0) {
+                const progress = (videos[0].currentTime / videos[0].duration) * 100;
+                progressBar.value = progress;
+            }
+        }
+
+        function playVideos() {
+            videos.forEach(video => {
+                video.playbackRate = currentSpeed;
+                video.play();
+            });
+            playing = true;
+            playPauseBtn.textContent = '暂停';
+        }
+
+        function pauseVideos() {
+            videos.forEach(video => {
+                video.pause();
+            });
+            playing = false;
+            playPauseBtn.textContent = '播放';
+        }
+
+        function setPlaybackSpeed(speed) {
+            currentSpeed = speed;
+            if (playing) {
+                videos.forEach(video => {
+                    video.playbackRate = currentSpeed;
+                });
+            }
+        }
+
+        function resetVideos() {
+            videos.forEach(video => {
+                video.pause();
+                video.currentTime = 0;
+            });
+            playing = false;
+            playPauseBtn.textContent = '播放';
+            videoContainer.innerHTML = '';
+            progressBar.value = 0;
+            videos = [];
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatBitrate(bps) {
+            if (!bps) return 'N/A';
+            const mbps = bps / 1000000;
+            return mbps.toFixed(2) + ' Mbps';
+        }
+
+        function updateVideoInfo(video, infoElement, fileSize) {
+            const duration = video.duration;
+            const bitrate = fileSize && duration ? (fileSize * 8 / duration) : undefined;
+
+            const info = {
+                '分辨率': `${video.videoWidth} × ${video.videoHeight}`,
+                '时长': `${Math.floor(duration / 60)}:${Math.floor(duration % 60).toString().padStart(2, '0')}`,
+                '文件大小': fileSize ? formatFileSize(fileSize) : '未知',
+                '比特率': bitrate ? formatBitrate(bitrate) : '未知'
+            };
+
+            let html = '<table>';
+            for (const [key, value] of Object.entries(info)) {
+                html += `<tr><td>${key}:</td><td>${value}</td></tr>`;
+            }
+            html += '</table>';
+            
+            infoElement.innerHTML = html;
+        }
+
+        function adjustVideoAspectRatio(video) {
+            video.addEventListener('loadedmetadata', function() {
+                const wrapper = video.closest('.video-wrapper');
+                const aspectRatio = (video.videoHeight / video.videoWidth) * 100;
+                wrapper.style.paddingBottom = aspectRatio + '%';
+            });
+        }
+
+        function adjustVideoSize(video) {
+            video.addEventListener('loadedmetadata', function() {
+                const videoRatio = video.videoWidth / video.videoHeight;
+                if (videoRatio > 1) {
+                    // 横向视频
+                    video.style.width = '100%';
+                    video.style.height = 'auto';
+                } else {
+                    // 竖向视频
+                    video.style.width = 'auto';
+                    video.style.height = '100%';
+                }
+            });
+        }
+
+        function prevFrame() {
+            videos.forEach(video => {
+                video.currentTime = Math.max(0, video.currentTime - FRAME_DURATION);
+            });
+            updateTimestamp();
+        }
+
+        function nextFrame() {
+            videos.forEach(video => {
+                video.currentTime = Math.min(video.duration, video.currentTime + FRAME_DURATION);
+            });
+            updateTimestamp();
+        }
+    </script>
+</body>
+</html>

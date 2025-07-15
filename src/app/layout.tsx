@@ -1,26 +1,47 @@
+'use client';
+
 import './globals.css';
-import { Sidebar, SidebarProvider, SidebarRail } from '@/components/ui/sidebar';
+import { Sidebar, SidebarProvider, SidebarRail, SidebarTrigger } from '@/components/ui/sidebar';
 import Link from 'next/link';
 import { Analytics } from '@vercel/analytics/next';
+import { usePathname } from 'next/navigation';
+
+import { Film, SplitSquareHorizontal } from 'lucide-react';
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname = usePathname();
   return (
     <html lang="en">
       <body className="flex min-h-screen bg-background">
         <SidebarProvider>
           <div className="flex h-screen w-full">
-            <Sidebar className="border-r border-[#232329] bg-black text-white transition-all duration-200">
+            <Sidebar
+              collapsible="icon"
+              className="border-r border-[#232329] bg-black text-white transition-all duration-200 group/sidebar-wrapper group-data-[collapsible=icon]:w-16"
+            >
               <div className="flex flex-col h-full">
+                {/* 顶部伸缩按钮 */}
+                <div className="flex items-center justify-center py-2">
+                  <SidebarTrigger />
+                </div>
                 <nav className="flex-1 flex flex-col gap-2 p-2">
                   <Link
                     href="/tools/video-annotator"
-                    className="px-3 py-2 rounded hover:bg-[#232329] transition"
+                    className={`px-3 py-2 rounded flex items-center gap-2 transition font-medium group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${pathname === '/tools/video-annotator' ? 'bg-[#232329] text-cyan-400' : 'hover:bg-[#232329] text-white'}`}
                   >
-                    视频标注工具
+                    <Film size={18} />
+                    <span className="group-data-[collapsible=icon]:hidden">视频标注工具</span>
+                  </Link>
+                  <Link
+                    href="/tools/video-compare"
+                    className={`px-3 py-2 rounded flex items-center gap-2 transition font-medium group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${pathname === '/tools/video-compare' ? 'bg-[#232329] text-cyan-400' : 'hover:bg-[#232329] text-white'}`}
+                  >
+                    <SplitSquareHorizontal size={18} />
+                    <span className="group-data-[collapsible=icon]:hidden">视频比较工具</span>
                   </Link>
                   {/* 未来可加更多工具 */}
                 </nav>
@@ -33,8 +54,8 @@ export default function RootLayout({
             <main className="flex-1 min-h-screen bg-black text-white">{children}</main>
           </div>
         </SidebarProvider>
+        <Analytics />
       </body>
-      <Analytics />
     </html>
   );
 }
