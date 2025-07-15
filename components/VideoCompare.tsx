@@ -22,6 +22,7 @@ import {
   Captions,
   CaptionsOff,
   Loader2,
+  Clock4,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -77,54 +78,14 @@ const VideoCompare: React.FC = () => {
   const [videos, setVideos] = useState<VideoSource[]>([]);
   const [playing, setPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [urlInput, setUrlInput] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
-  const [metaOpen, setMetaOpen] = useState(true);
-  const handleToggleAllMeta = () => setMetaOpen((v) => !v);
-  const [value, setValue] = React.useState(50);
   const [metaOpenArr, setMetaOpenArr] = useState<boolean[]>([]);
   useEffect(() => {
     setMetaOpenArr(Array(videos.length).fill(true));
   }, [videos.length]);
   const toggleMeta = (idx: number) => {
     setMetaOpenArr((arr) => arr.map((v, i) => (i === idx ? !v : v)));
-  };
-
-  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
-  const [batchLinks, setBatchLinks] = useState('');
-  const handleBatchImport = async () => {
-    let links: string[] = [];
-    const input = batchLinks.trim();
-    // 尝试 JSON.parse
-    try {
-      const parsed = JSON.parse(input);
-      if (Array.isArray(parsed)) {
-        links = parsed.map((l) => String(l).trim()).filter(Boolean);
-      }
-    } catch {
-      // 非 JSON，尝试逗号或换行分割
-      links = input
-        .replace(/\[|\]|"|'/g, '') // 去除方括号和引号
-        .split(/,|\n/)
-        .map((l) => l.trim())
-        .filter(Boolean);
-    }
-    for (const url of links) {
-      const name = decodeURIComponent(url.split('/').pop() || url);
-      const meta = await getMediaInfo(url);
-      setVideos((prev) => [
-        ...prev,
-        {
-          id: `${Date.now()}-${name}`,
-          url,
-          name,
-          meta,
-        },
-      ]);
-    }
-    setBatchDialogOpen(false);
-    setBatchLinks('');
   };
 
   // 选择本地文件
@@ -146,24 +107,6 @@ const VideoCompare: React.FC = () => {
       return [...prev, ...newVideos.filter((v) => !existingIds.has(v.id))];
     });
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  // 通过URL加载
-  const handleLoadUrl = async () => {
-    if (!urlInput.trim()) return;
-    const url = urlInput.trim();
-    const name = decodeURIComponent(url.split('/').pop() || url);
-    const meta = await getMediaInfo(url);
-    setVideos((prev) => [
-      ...prev,
-      {
-        id: `${Date.now()}-${name}`,
-        url,
-        name,
-        meta,
-      },
-    ]);
-    setUrlInput('');
   };
 
   // 获取媒体信息
@@ -268,9 +211,6 @@ const VideoCompare: React.FC = () => {
   const allLoaded = videoDurations.length === videos.length && videoDurations.every((d) => d > 0);
   const maxDuration = allLoaded ? Math.max(...videoDurations) : 0;
 
-  // 计算主显示值
-  const displayValue = seekMode === 'time' ? sliderValue : Math.round(sliderValue);
-
   // seek 逻辑
   function handleSliderChange([val]: number[]) {
     setSliderValue(val);
@@ -333,7 +273,7 @@ const VideoCompare: React.FC = () => {
       <div className="bg-[#232326] text-zinc-200 rounded-md p-3 text-xs mt-2 w-full">
         <div className="mb-1 font-semibold">
           {fileName}
-          {ext ? <span className="text-zinc-400">.{ext}</span> : ''}{' '}
+          {ext ? <span className="text-zinc-400">.{ext}</span> : ''}
           <span className="text-zinc-400">({format})</span>
         </div>
         <div>时长：{duration}</div>
@@ -394,6 +334,7 @@ const VideoCompare: React.FC = () => {
     );
     setGlobalLoading(false);
   };
+  // 1. 修复 handleSetRate loading
   const handleSetRate = async (rate: number) => {
     setPlaybackRate(rate);
     setPlaying(false);
@@ -404,6 +345,22 @@ const VideoCompare: React.FC = () => {
           v.playbackRate = rate;
           v.pause();
           setVideoLoadingArr((arr) => arr.map((val, i) => (i === idx ? true : val)));
+        }
+      }),
+    );
+    setGlobalLoading(false); // 确保 loading 关闭
+  };
+
+  // 2. 新增 handleSyncTime
+  const handleSyncTime = async () => {
+    setGlobalLoading(true);
+    setPlaying(false);
+    const syncTime = currentTime;
+    await Promise.all(
+      videoRefs.current.map(async (v, idx) => {
+        if (v) {
+          setVideoLoadingArr((arr) => arr.map((val, i) => (i === idx ? true : val)));
+          v.currentTime = syncTime;
         }
       }),
     );
@@ -458,10 +415,10 @@ const VideoCompare: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#18181b] flex flex-col justify-between p-8 gap-10">
+    <div className="relative min-h-screen bg-[#000] flex flex-col justify-between p-8 gap-10">
       {/* 视频区大框加拖拽事件和提示 */}
       <div
-        className="w-full flex-1 mx-auto bg-[#18181b] border-[#232326] shadow-lg flex items-center justify-center overflow-y-auto relative"
+        className="w-full flex-1 mx-auto bg-[#000] border-[#232326] shadow-lg flex items-center justify-center overflow-y-auto relative"
         style={{ maxHeight: 'calc(100vh - 220px)' }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -488,7 +445,7 @@ const VideoCompare: React.FC = () => {
               <div className="text-zinc-500 text-5xl mb-4">
                 <FolderOpen size={48} />
               </div>
-              <div className="text-zinc-400 text-lg text-center">点击或拖拽导入视频文件</div>
+              <div className="text-zinc-400 text-lg text-center mb-2">点击或拖拽导入视频文件</div>
               <input
                 type="file"
                 accept="video/*"
@@ -681,59 +638,109 @@ const VideoCompare: React.FC = () => {
               </span>
             </div>
 
-            {/* 操作栏右侧按钮区，插入上一帧和下一帧按钮 */}
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={handlePrevFrame}
-                className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
-                size="icon"
-              >
-                <ChevronLeft size={18} />
-              </Button>
-              <Button
-                onClick={handleNextFrame}
-                className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
-                size="icon"
-              >
-                <ChevronRight size={18} />
-              </Button>
-              <Select
-                value={String(playbackRate)}
-                onValueChange={(val) => handleSetRate(Number(val))}
-              >
-                <SelectTrigger className="w-20 bg-[#18181b] text-white border border-[#333]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#232326] text-white">
-                  <SelectItem value="0.25">0.25x</SelectItem>
-                  <SelectItem value="0.5">0.5x</SelectItem>
-                  <SelectItem value="1">1x</SelectItem>
-                  <SelectItem value="1.5">1.5x</SelectItem>
-                  <SelectItem value="2">2x</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                onClick={handleReset}
-                className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
-                size="icon"
-              >
-                <RotateCcw size={18} />
-              </Button>
-              <Button
-                onClick={handleClear}
-                className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
-                size="icon"
-              >
-                <Trash2 size={18} />
-              </Button>
-              <Button
-                className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
-                onClick={() => setMetaOpenArr((arr) => arr.map((v) => !arr.every(Boolean)))}
-                size="icon"
-              >
-                {metaOpenArr.every(Boolean) ? <CaptionsOff size={18} /> : <Captions size={18} />}
-              </Button>
-            </div>
+            {/* 操作栏右侧按钮区，所有按钮加Tooltip */}
+            <TooltipProvider>
+              <div className="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handlePrevFrame}
+                      className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
+                      size="icon"
+                    >
+                      <ChevronLeft size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>上一帧</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleNextFrame}
+                      className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
+                      size="icon"
+                    >
+                      <ChevronRight size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>下一帧</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Select
+                      value={String(playbackRate)}
+                      onValueChange={(val) => handleSetRate(Number(val))}
+                    >
+                      <SelectTrigger className="w-20 bg-[#18181b] text-white border border-[#333]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#232326] text-white">
+                        <SelectItem value="0.25">0.25x</SelectItem>
+                        <SelectItem value="0.5">0.5x</SelectItem>
+                        <SelectItem value="1">1x</SelectItem>
+                        <SelectItem value="1.5">1.5x</SelectItem>
+                        <SelectItem value="2">2x</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TooltipTrigger>
+                  <TooltipContent>倍速播放</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleReset}
+                      className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
+                      size="icon"
+                    >
+                      <RotateCcw size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>重置所有视频进度</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleClear}
+                      className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
+                      size="icon"
+                    >
+                      <Trash2 size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>清空所有视频</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={handleSyncTime}
+                      className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
+                      size="icon"
+                    >
+                      <Clock4 size={18} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>同步所有视频到当前时间</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      className="bg-[#18181b] text-white border border-[#333] hover:bg-[#333] hover:text-primary"
+                      onClick={() => setMetaOpenArr((arr) => arr.map((v) => !arr.every(Boolean)))}
+                      size="icon"
+                    >
+                      {metaOpenArr.every(Boolean) ? (
+                        <CaptionsOff size={18} />
+                      ) : (
+                        <Captions size={18} />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {metaOpenArr.every(Boolean) ? '收起所有视频信息' : '展开所有视频信息'}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
 
             <div className="flex  items-center gap-2 w-full mt-1">
               <div className="flex items-center gap-2 mb-1">
