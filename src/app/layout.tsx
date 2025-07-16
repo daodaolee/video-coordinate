@@ -44,7 +44,7 @@ export default function RootLayout({
                     <span className="group-data-[collapsible=icon]:hidden">视频比较工具</span>
                   </Link>
                   <Link
-                    href="/tools/mp4box-analyze"
+                    href="/tools/mp4-analyze"
                     className={`px-3 py-2 rounded flex items-center gap-2 transition font-medium group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${pathname === '/tools/mp4box-analyze' ? 'bg-[#232329] text-cyan-400' : 'hover:bg-[#232329] text-white'}`}
                   >
                     <FileIcon size={18} />
