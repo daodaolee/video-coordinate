@@ -432,7 +432,7 @@ const VideoCompare: React.FC = () => {
           </div>
         )}
         {/* 视频区大框下的视频容器加最大宽度和横向滚动 */}
-        <div className="flex flex-row gap-x-6 w-full items-start justify-start overflow-x-auto max-w-[1600px]">
+        <div className="flex flex-row gap-x-2 w-full items-start justify-start overflow-x-auto max-w-[1600px]">
           {videos.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center h-[320px] w-full col-span-2 cursor-pointer select-none"
@@ -494,7 +494,7 @@ const VideoCompare: React.FC = () => {
                 metaInfo = (
                   <Collapse in={metaOpenArr[idx]} timeout={300} unmountOnExit>
                     <div className="bg-[#232326] text-zinc-200 rounded-md p-3 text-xs mt-2 w-full">
-                      <div className="flex flex-col md:flex-row gap-2 md:gap-4 w-full">
+                      <div className="flex  gap-6 w-full">
                         {/* 通用信息 */}
                         <div className="flex-1 min-w-0 mb-2 md:mb-0">
                           <div className="font-semibold text-zinc-300 mb-1">通用信息</div>
@@ -554,61 +554,92 @@ const VideoCompare: React.FC = () => {
                   </Collapse>
                 );
               }
+              // 动画状态
+              const infoOpen = metaOpenArr[idx];
               return (
                 <Card
                   key={video.id}
-                  className="min-w-[600px] flex-0 bg-[#232326] rounded-lg p-2 flex flex-col items-center border border-[#333] relative max-h-[70vh] overflow-y-auto"
+                  className="bg-[#232326] rounded-lg p-2 flex flex-col border border-[#333] relative overflow-y-auto"
                 >
                   {videoLoadingArr[idx] && (
                     <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 rounded-lg">
                       <Loader2 className="animate-spin text-zinc-400" size={36} />
                     </div>
                   )}
-                  <CardHeader className="flex flex-row items-center justify-between w-full pb-2">
-                    <CardTitle className="text-white text-base truncate">
-                      {fileName}
-                      {ext ? <span className="text-zinc-400">.{ext}</span> : ''}{' '}
-                    </CardTitle>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-zinc-400 hover:text-white"
-                        onClick={() => toggleMeta(idx)}
-                      >
-                        {metaOpenArr[idx] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-red-400 hover:text-white"
-                        onClick={() => handleDeleteVideo(idx)}
-                      >
-                        <Trash2 size={18} />
-                      </Button>
+                  {/* 信息块固定在头部，横向排列，带3D翻页动效 */}
+                  <div
+                    className={`w-full flex flex-row items-center gap-2 px-4 transition-all duration-500 origin-top z-20 ${infoOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} `}
+                    style={{
+                      position: 'absolute',
+                      top: 32,
+                      left: 0,
+                      right: 0,
+                      transform: infoOpen
+                        ? 'perspective(800px) rotateX(0deg) scaleY(1)'
+                        : 'perspective(800px) rotateX(-90deg) scaleY(0.7)',
+                      transition: 'transform 0.5s cubic-bezier(0.4,0.2,0.2,1), opacity 0.4s',
+                      willChange: 'transform, opacity',
+                    }}
+                  >
+                    <div className="flex flex-col w-full">
+                      <div className="flex flex-row items-center gap-2 mb-2">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-red-400 hover:text-white"
+                          onClick={() => handleDeleteVideo(idx)}
+                        >
+                          <Trash2 size={18} />
+                        </Button>
+                        <h3 className="text-white text-base font-semibold truncate flex-1">
+                          {fileName}
+                          {ext ? <span className="text-zinc-400">.{ext}</span> : ''}{' '}
+                        </h3>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="text-zinc-400 hover:text-white"
+                          onClick={() => toggleMeta(idx)}
+                        >
+                          {infoOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                        </Button>
+                      </div>
+                      <div className="w-full">
+                        <div className="bg-[#18181b] border border-[#333] rounded-lg shadow p-3">
+                          {metaInfo}
+                        </div>
+                      </div>
                     </div>
-                  </CardHeader>
-                  <CardContent className="w-full flex flex-col h-full overflow-y-auto">
-                    <div className="flex justify-center w-full flex-1">
-                      <video
-                        ref={(el) => {
-                          videoRefs.current[idx] = el;
-                        }}
-                        src={video.url}
-                        className="rounded-md bg-black max-w-full max-h-[50vh] mx-auto"
-                        style={{ display: 'block' }}
-                        controls
-                        preload="metadata"
-                        onLoadedMetadata={() => {
-                          handleVideoLoaded(idx);
-                          setVideoLoadedFlag((f) => f + 1);
-                        }}
-                        onSeeked={() => handleVideoLoaded(idx)}
-                      />
-                    </div>
-                    {/* Meta信息折叠区，分为通用、视频、音频三块，带动效 */}
-                    {metaInfo}
-                  </CardContent>
+                  </div>
+                  {/* 视频区，scale以自身中心缩放，内容不被遮挡 */}
+                  <div
+                    className={`flex items-center justify-center relative transition-all duration-500 z-0`}
+                    style={{
+                      minHeight: '320px',
+                      // marginTop: infoOpen ? 128 : 32,
+                      transform: infoOpen
+                        ? 'scale(0.85) translateY(80px)'
+                        : 'scale(1) translateY(0)',
+                      transformOrigin: 'center top',
+                      willChange: 'transform',
+                    }}
+                  >
+                    <video
+                      ref={(el) => {
+                        videoRefs.current[idx] = el;
+                      }}
+                      src={video.url}
+                      className="rounded-md bg-black max-w-full max-h-[80vh] mx-auto min-w-[700px]"
+                      style={{ display: 'block' }}
+                      controls
+                      preload="metadata"
+                      onLoadedMetadata={() => {
+                        handleVideoLoaded(idx);
+                        setVideoLoadedFlag((f) => f + 1);
+                      }}
+                      onSeeked={() => handleVideoLoaded(idx)}
+                    />
+                  </div>
                 </Card>
               );
             })
