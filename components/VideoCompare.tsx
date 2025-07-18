@@ -82,7 +82,7 @@ const VideoCompare: React.FC = () => {
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const [metaOpenArr, setMetaOpenArr] = useState<boolean[]>([]);
   useEffect(() => {
-    setMetaOpenArr(Array(videos.length).fill(true));
+    setMetaOpenArr(Array(videos.length).fill(false));
   }, [videos.length]);
   const toggleMeta = (idx: number) => {
     setMetaOpenArr((arr) => arr.map((v, i) => (i === idx ? !v : v)));
@@ -432,7 +432,7 @@ const VideoCompare: React.FC = () => {
           </div>
         )}
         {/* 视频区大框下的视频容器加最大宽度和横向滚动 */}
-        <div className="flex flex-row gap-x-2 w-full items-start justify-start overflow-x-auto max-w-[1600px]">
+        <div className="flex flex-row gap-x-2 w-full items-start justify-start overflow-x-auto max-w-[100vw]">
           {videos.length === 0 ? (
             <div
               className="flex flex-col items-center justify-center h-[320px] w-full col-span-2 cursor-pointer select-none"
@@ -559,7 +559,7 @@ const VideoCompare: React.FC = () => {
               return (
                 <Card
                   key={video.id}
-                  className="bg-[#232326] rounded-lg p-2 flex flex-col border border-[#333] relative overflow-y-auto"
+                  className="shrink-0 bg-[#232326] rounded-lg p-2 flex flex-col border border-[#333] relative overflow-y-auto"
                 >
                   {videoLoadingArr[idx] && (
                     <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 rounded-lg">
