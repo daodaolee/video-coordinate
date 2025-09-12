@@ -113,33 +113,63 @@ const VideoAnnotator: React.FC = () => {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
     const onTimeUpdate = () => {
       setCurrentTime(video.currentTime);
       setProgress(video.duration ? video.currentTime / video.duration : 0);
     };
+
     const onLoaded = () => {
       setDuration(video.duration);
       setCurrentTime(video.currentTime);
       setVideoLoading(false);
     };
+
     const onSeeking = () => {
       setVideoLoading(true);
       setPlaying(false);
       video.pause();
     };
+
     const onSeeked = () => setVideoLoading(false);
     const onLoadStart = () => setVideoLoading(true);
+
+    const onError = (e: Event) => {
+      console.error('视频加载失败', videoUrl, e);
+      setVideoLoading(false);
+
+      // 如果是编码问题，尝试不同的编码方式
+      if (videoUrl && /[\u4e00-\u9fa5]/.test(videoUrl)) {
+        console.log('检测到中文字符，尝试重新编码...');
+        try {
+          // 尝试完全重新编码URL
+          const url = new URL(videoUrl);
+          const reEncodedUrl =
+            url.origin + encodeURI(decodeURI(url.pathname)) + url.search + url.hash;
+          if (reEncodedUrl !== videoUrl) {
+            console.log('尝试使用重新编码的URL:', reEncodedUrl);
+            // 可以在这里提示用户或自动重试
+          }
+        } catch (urlError) {
+          console.error('URL重新编码失败:', urlError);
+        }
+      }
+    };
+
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('loadedmetadata', onLoaded);
     video.addEventListener('seeking', onSeeking);
     video.addEventListener('seeked', onSeeked);
     video.addEventListener('loadstart', onLoadStart);
+    video.addEventListener('error', onError);
+
     return () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('loadedmetadata', onLoaded);
       video.removeEventListener('seeking', onSeeking);
       video.removeEventListener('seeked', onSeeked);
       video.removeEventListener('loadstart', onLoadStart);
+      video.removeEventListener('error', onError);
     };
   }, [videoUrl]);
 
@@ -475,8 +505,30 @@ const VideoAnnotator: React.FC = () => {
       // setError('请输入视频URL'); // Removed as per edit hint
       return;
     }
-    // setError(''); // Removed as per edit hint
-    setVideoUrl(videoUrl.trim());
+
+    try {
+      // 处理可能包含中文的URL
+      let processedUrl = videoUrl.trim();
+
+      // 如果URL包含中文字符，进行编码处理
+      if (/[\u4e00-\u9fa5]/.test(processedUrl)) {
+        // 分离URL的各个部分
+        const urlParts = processedUrl.split('/');
+        const processedParts = urlParts.map((part, index) => {
+          // 跳过协议部分 (http:, https:) 和空字符串
+          if (index < 3 || !part) return part;
+          // 对可能包含中文的路径部分进行编码
+          return encodeURIComponent(decodeURIComponent(part));
+        });
+        processedUrl = processedParts.join('/');
+      }
+
+      setVideoUrl(processedUrl);
+    } catch (error) {
+      console.error('URL处理失败:', error);
+      // 如果处理失败，直接使用原始URL
+      setVideoUrl(videoUrl.trim());
+    }
   };
 
   // Redraw coordinates when changed
@@ -541,55 +593,7 @@ const VideoAnnotator: React.FC = () => {
       },
     ]);
   };
-  // 1. npz面板每项导入逻辑
-  const handleImportNpzItem = async (item: (typeof npzItems)[0], idx: number) => {
-    try {
-      let arrayBuffer: ArrayBuffer | null = null;
-      if (item.type === 'file' && item.file) {
-        arrayBuffer = await item.file.arrayBuffer();
-      } else if (item.type === 'url' && item.url) {
-        const res = await fetch(item.url.trim());
-        if (!res.ok) throw new Error('下载失败');
-        arrayBuffer = await res.arrayBuffer();
-      }
-      if (!arrayBuffer) return;
-      const zip = await JSZip.loadAsync(arrayBuffer);
-      const npyFile = zip.file('crop_box.npy');
-      if (!npyFile) return;
-      const npyBuffer = await npyFile.async('arraybuffer');
-      const npy = new NPYJS();
-      const arr = await npy.parse(npyBuffer);
-      const coords: number[][] = [];
-      for (let i = 0; i < arr.shape[0]; i++) {
-        const row = [];
-        for (let j = 0; j < arr.shape[1]; j++) {
-          row.push(arr.data[i * arr.shape[1] + j]);
-        }
-        coords.push(row.map((x) => Math.round(Number(x))));
-      }
-      // 更新npzItems中本项的boxes
-      setNpzItems((prev) =>
-        prev.map((it, i) =>
-          i === idx
-            ? { ...it, boxes: coords.map((c) => ({ coords: c, type: 'npz', npzIndex: idx })) }
-            : it,
-        ),
-      );
-      // 更新全局boxes，先移除所有type:npz且npzIndex为idx的，再加上新解析的
-      setNpzBoxes((prev) => [
-        ...prev.filter((b) => b.npzIndex !== idx),
-        ...coords.map((c) => ({ coords: c, npzIndex: idx })),
-      ]);
-    } catch (e) {
-      // 可加错误提示
-    }
-  };
-  // 2. npz面板每项清空本项标注
-  const handleClearNpzItem = (idx: number) => {
-    setNpzItems((prev) => prev.map((it, i) => (i === idx ? { ...it, boxes: [] } : it)));
-    setNpzBoxes((prev) => prev.filter((b) => b.npzIndex !== idx));
-  };
-  // 3. 删除npz项时同步清空boxes
+
   const handleRemoveNpzItem = (id: string) => {
     // 找到要删除的 idx
     const idx = npzItems.findIndex((item) => item.id === id);
@@ -803,8 +807,9 @@ const VideoAnnotator: React.FC = () => {
                   ref={videoRef}
                   className="block max-w-full max-h-[70vh] rounded-lg bg-black"
                   src={videoUrl}
-                  onError={() => {
-                    console.error('视频加载失败', videoUrl);
+                  onError={(e) => {
+                    console.error('视频加载失败', videoUrl, e);
+                    setVideoLoading(false);
                   }}
                   controls={false}
                   tabIndex={-1}
@@ -813,6 +818,7 @@ const VideoAnnotator: React.FC = () => {
                     maxHeight: '70vh',
                     maxWidth: '100%',
                   }}
+                  crossOrigin="anonymous"
                 >
                   您的浏览器不支持 video 标签。
                 </video>
