@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Analytics } from '@vercel/analytics/next';
 import { usePathname } from 'next/navigation';
 
-import { Film, SplitSquareHorizontal, FileIcon } from 'lucide-react';
+import { Film, SplitSquareHorizontal, FileIcon, Subtitles } from 'lucide-react';
 
 export default function RootLayout({
   children,
@@ -49,6 +49,13 @@ export default function RootLayout({
                   >
                     <FileIcon size={18} />
                     <span className="group-data-[collapsible=icon]:hidden">源数据解析</span>
+                  </Link>
+                  <Link
+                    href="/tools/srt-parser"
+                    className={`px-3 py-2 rounded flex items-center gap-2 transition font-medium group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${pathname === '/tools/srt-parser' ? 'bg-[#232329] text-cyan-400' : 'hover:bg-[#232329] text-white'}`}
+                  >
+                    <Subtitles size={18} />
+                    <span className="group-data-[collapsible=icon]:hidden">解析 SRT</span>
                   </Link>
                   {/* 未来可加更多工具 */}
                 </nav>
