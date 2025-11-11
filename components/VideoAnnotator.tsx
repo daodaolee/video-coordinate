@@ -806,7 +806,7 @@ const VideoAnnotator: React.FC = () => {
                 <video
                   ref={videoRef}
                   className="block max-w-full max-h-[70vh] rounded-lg bg-black"
-                  src={videoUrl}
+                  src={videoUrl || undefined}
                   onError={(e) => {
                     console.error('视频加载失败', videoUrl, e);
                     setVideoLoading(false);

@@ -213,7 +213,7 @@ const Mp4Analyze: React.FC = () => {
                 )}
                 <video
                   ref={videoRef}
-                  src={videoUrl}
+                  src={videoUrl || undefined}
                   className="w-full max-w-3xl h-[360px] rounded-lg bg-black border border-[#333]"
                   style={{ objectFit: 'contain' }}
                   controls

@@ -737,7 +737,7 @@ const VideoCompare: React.FC = () => {
                     ref={(el) => {
                       videoRefs.current[idx] = el;
                     }}
-                    src={video.url}
+                    src={video.url || undefined}
                     className="rounded-md bg-black max-w-full max-h-[80vh] mx-auto min-w-[700px]"
                     style={{ display: 'block' }}
                     controls
