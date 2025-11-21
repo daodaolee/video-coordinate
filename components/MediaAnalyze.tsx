@@ -420,7 +420,8 @@ const formatValue = (key: string, value: unknown): string => {
     const hours = Math.floor(value / 3600);
     const minutes = Math.floor((value % 3600) / 60);
     const seconds = (value % 60).toFixed(2);
-    if (hours > 0) return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.padStart(5, '0')}`;
+    if (hours > 0)
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.padStart(5, '0')}`;
     return `${minutes}:${seconds.padStart(5, '0')}`;
   }
 
@@ -555,7 +556,11 @@ const MediaAnalyze: React.FC = () => {
   };
 
   // 解析元数据 - 统一使用 ExifTool
-  const parseMetadata = async (source: File | Blob, name: string, type: 'image' | 'video' | 'audio' | 'unknown') => {
+  const parseMetadata = async (
+    source: File | Blob,
+    name: string,
+    type: 'image' | 'video' | 'audio' | 'unknown',
+  ) => {
     try {
       setLoading(true);
       setError('');
@@ -682,12 +687,7 @@ const MediaAnalyze: React.FC = () => {
         return (
           <div className="relative w-full flex flex-col items-center justify-center bg-black rounded-lg border border-[#333] p-8 min-h-[200px]">
             <FileAudio className="w-16 h-16 text-[#38bdf8] mb-4" />
-            <audio
-              src={mediaUrl}
-              className="w-full max-w-md"
-              controls
-              preload="metadata"
-            />
+            <audio src={mediaUrl} className="w-full max-w-md" controls preload="metadata" />
           </div>
         );
 
@@ -706,14 +706,14 @@ const MediaAnalyze: React.FC = () => {
 
     // 按类别分组
     const groups: Record<string, Array<[string, unknown]>> = {
-      '文件信息': [],
-      '基本参数': [],
-      '拍摄参数': [],
-      'GPS信息': [],
+      文件信息: [],
+      基本参数: [],
+      拍摄参数: [],
+      GPS信息: [],
       '视频/音频': [],
       '相机/镜头': [],
-      '图像处理': [],
-      '其他信息': [],
+      图像处理: [],
+      其他信息: [],
     };
 
     Object.entries(metadata).forEach(([key, value]) => {
@@ -935,9 +935,7 @@ const MediaAnalyze: React.FC = () => {
           );
         })}
         {Object.keys(filteredGroups).length === 0 && searchQuery && (
-          <div className="text-center text-zinc-500 py-8">
-            未找到匹配"{searchQuery}"的字段
-          </div>
+          <div className="text-center text-zinc-500 py-8">未找到匹配"{searchQuery}"的字段</div>
         )}
       </div>
     );
@@ -955,9 +953,7 @@ const MediaAnalyze: React.FC = () => {
                 图片/视频/音频
               </span>
             </div>
-            <p className="text-xs text-zinc-400 mt-2">
-              基于 ExifTool 引擎，提取完整元数据
-            </p>
+            <p className="text-xs text-zinc-400 mt-2">基于 ExifTool 引擎，提取完整元数据</p>
           </CardHeader>
           <CardContent className="space-y-4 flex-1 overflow-auto">
             {/* URL 输入 */}
@@ -1005,7 +1001,10 @@ const MediaAnalyze: React.FC = () => {
             </div>
 
             {fileName && !loading && (
-              <div className="text-xs text-zinc-400 truncate bg-[#18181b] p-2 rounded" title={fileName}>
+              <div
+                className="text-xs text-zinc-400 truncate bg-[#18181b] p-2 rounded"
+                title={fileName}
+              >
                 📄 {fileName}
               </div>
             )}

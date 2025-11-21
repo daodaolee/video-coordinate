@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Analytics } from '@vercel/analytics/next';
 import { usePathname } from 'next/navigation';
 
-import { Film, SplitSquareHorizontal, FileIcon, Subtitles, FileSearch } from 'lucide-react';
+import { Film, SplitSquareHorizontal, FileIcon, Subtitles, FileSearch, Sparkles } from 'lucide-react';
 
 export default function RootLayout({
   children,
@@ -56,6 +56,13 @@ export default function RootLayout({
                   >
                     <Subtitles size={18} />
                     <span className="group-data-[collapsible=icon]:hidden">解析 SRT</span>
+                  </Link>
+                  <Link
+                    href="/tools/prompt-optimizer"
+                    className={`px-3 py-2 rounded flex items-center gap-2 transition font-medium group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${pathname === '/tools/prompt-optimizer' ? 'bg-[#232329] text-cyan-400' : 'hover:bg-[#232329] text-white'}`}
+                  >
+                    <Sparkles size={18} />
+                    <span className="group-data-[collapsible=icon]:hidden">提示词优化</span>
                   </Link>
                   {/* 未来可加更多工具 */}
                 </nav>
