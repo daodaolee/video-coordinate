@@ -6,7 +6,15 @@ import Link from 'next/link';
 import { Analytics } from '@vercel/analytics/next';
 import { usePathname } from 'next/navigation';
 
-import { Film, SplitSquareHorizontal, FileIcon, Subtitles, FileSearch, Sparkles } from 'lucide-react';
+import {
+  Film,
+  SplitSquareHorizontal,
+  FileIcon,
+  Subtitles,
+  FileSearch,
+  Sparkles,
+  GitCompare,
+} from 'lucide-react';
 
 export default function RootLayout({
   children,
@@ -63,6 +71,13 @@ export default function RootLayout({
                   >
                     <Sparkles size={18} />
                     <span className="group-data-[collapsible=icon]:hidden">提示词优化</span>
+                  </Link>
+                  <Link
+                    href="/tools/tracking-compare"
+                    className={`px-3 py-2 rounded flex items-center gap-2 transition font-medium group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${pathname === '/tools/tracking-compare' ? 'bg-[#232329] text-cyan-400' : 'hover:bg-[#232329] text-white'}`}
+                  >
+                    <GitCompare size={18} />
+                    <span className="group-data-[collapsible=icon]:hidden">埋点对比</span>
                   </Link>
                   {/* 未来可加更多工具 */}
                 </nav>
