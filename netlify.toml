@@ -1,6 +1,10 @@
 [build]
-  command = "npm run build"
+  command = "npm ci --include=optional && npm run build"
   publish = "out"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
 
 [[headers]]
   for = "/*"
