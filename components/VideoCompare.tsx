@@ -534,7 +534,7 @@ const VideoCompare: React.FC = () => {
       )}
       {/* 视频区：有视频时渲染 */}
       {videos.length > 0 && (
-        <div className="flex flex-row gap-x-2 w-full items-start justify-start overflow-x-auto max-w-[100vw] mb-8">
+        <div className="flex flex-wrap gap-4 w-full items-start justify-start mb-8">
           {videos.map((video, idx) => {
             const ref = videoRefs.current[idx];
             // meta 信息优先展示文件名和后缀
@@ -726,7 +726,7 @@ const VideoCompare: React.FC = () => {
                 <div
                   className={`flex items-center justify-center relative transition-all duration-500 z-0`}
                   style={{
-                    minHeight: '320px',
+                    height: '400px',
                     // marginTop: infoOpen ? 128 : 32,
                     transform: infoOpen ? 'scale(0.85) translateY(80px)' : 'scale(1) translateY(0)',
                     transformOrigin: 'center top',
@@ -738,7 +738,7 @@ const VideoCompare: React.FC = () => {
                       videoRefs.current[idx] = el;
                     }}
                     src={video.url || undefined}
-                    className="rounded-md bg-black max-w-full max-h-[80vh] mx-auto min-w-[700px]"
+                    className="rounded-md bg-black h-[400px] w-auto mx-auto object-contain"
                     style={{ display: 'block' }}
                     controls
                     preload="metadata"

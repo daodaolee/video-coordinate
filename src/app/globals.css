@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import "tw-animate-css";
+/* @import 'tw-animate-css'; */
 
 @layer base {
   html,
@@ -13,7 +13,6 @@
 }
 
 :root {
-
   --radius: 0.625rem;
 
   --background: oklch(1 0 0);
@@ -80,7 +79,6 @@
 }
 
 .dark {
-
   --background: oklch(0.141 0.005 285.823);
 
   --foreground: oklch(0.985 0 0);
@@ -153,5 +151,10 @@
   }
 }
 /* 全局样式文件中添加 */
-*:-webkit-scrollbar { display: none; }
-*{ -ms-overflow-style: none; scrollbar-width: none; }
+*:-webkit-scrollbar {
+  display: none;
+}
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -6,7 +6,15 @@ import Link from 'next/link';
 import { Analytics } from '@vercel/analytics/next';
 import { usePathname } from 'next/navigation';
 
-import { Film, SplitSquareHorizontal, FileIcon, Subtitles, FileSearch, Sparkles, GitCompare } from 'lucide-react';
+import {
+  Film,
+  SplitSquareHorizontal,
+  FileIcon,
+  Subtitles,
+  FileSearch,
+  Sparkles,
+  GitCompare,
+} from 'lucide-react';
 
 export default function RootLayout({
   children,
