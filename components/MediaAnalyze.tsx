@@ -541,7 +541,7 @@ const MediaAnalyze: React.FC = () => {
           FileName: name,
           FileSize: source.size,
           FileType: source.type || 'unknown',
-          提示: result.error || '解析失败',
+          提示: (result as any).error || '解析失败',
         };
       }
     } catch (err) {
