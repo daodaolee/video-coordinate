@@ -473,6 +473,157 @@ const getFileType = (file: File | null, url: string): 'image' | 'video' | 'audio
   return 'unknown';
 };
 
+// 本地解析元数据（使用 exifr + react-mediainfo）
+const parseExifToolMetadata = async (
+  source: File | Blob,
+  name: string,
+): Promise<Record<string, unknown>> => {
+  const mimeType = source.type || '';
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+
+  // 判断文件类型
+  const isImage =
+    mimeType.startsWith('image/') ||
+    ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'heic', 'heif', 'avif'].includes(ext);
+  const isVideo =
+    mimeType.startsWith('video/') ||
+    ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'm4v'].includes(ext);
+  const isAudio =
+    mimeType.startsWith('audio/') ||
+    ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'wma'].includes(ext);
+
+  const flattenedData: Record<string, unknown> = {
+    FileName: name,
+    FileSize: source.size,
+    FileType: mimeType || 'unknown',
+  };
+
+  try {
+    if (isImage) {
+      // 使用 exifr 解析图片
+      const exifr = await import('exifr');
+
+      const result = await exifr.parse(source, true as any);
+
+      if (result) {
+        Object.entries(result).forEach(([key, value]) => {
+          if (value === undefined || value === null) return;
+          if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+            Object.entries(value as Record<string, unknown>).forEach(([subKey, subValue]) => {
+              if (subValue !== undefined && subValue !== null) {
+                flattenedData[`${key}:${subKey}`] = subValue;
+              }
+            });
+          } else {
+            flattenedData[key] = value;
+          }
+        });
+      }
+    } else if (isVideo || isAudio) {
+      // 使用 react-mediainfo 解析视频/音频
+      const { getInfo } = await import('react-mediainfo');
+
+      let fileToAnalyze: File;
+      if (source instanceof File) {
+        fileToAnalyze = source;
+      } else {
+        fileToAnalyze = new File([source], name, { type: source.type });
+      }
+
+      const result = await getInfo(fileToAnalyze);
+
+      if (result && typeof result === 'object') {
+        const mediaInfo = result as {
+          media?: {
+            track?: Array<{
+              '@type': string;
+              [key: string]: unknown;
+            }>;
+          };
+        };
+
+        if (mediaInfo.media?.track) {
+          mediaInfo.media.track.forEach((track, index) => {
+            const trackType = track['@type'] || 'Unknown';
+            const prefix = `${trackType}_Track_${index}`;
+
+            Object.entries(track).forEach(([key, value]) => {
+              if (key === '@type') return;
+              if (value === undefined || value === null) return;
+              if (typeof value === 'object' && !Array.isArray(value)) {
+                Object.entries(value as Record<string, unknown>).forEach(([subKey, subValue]) => {
+                  if (subValue !== undefined && subValue !== null) {
+                    flattenedData[`${prefix}_${key}_${subKey}`] = subValue;
+                  }
+                });
+              } else {
+                flattenedData[`${prefix}_${key}`] = value;
+              }
+            });
+          });
+        }
+      }
+    } else {
+      // 未知类型，尝试两种解析器
+      try {
+        const exifr = await import('exifr');
+
+        const imageResult = await exifr.parse(source, true as any);
+        if (imageResult && Object.keys(imageResult).length > 0) {
+          Object.entries(imageResult).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+              flattenedData[key] = value;
+            }
+          });
+          return flattenedData;
+        }
+      } catch {
+        // 图片解析失败，尝试 MediaInfo
+      }
+
+      try {
+        const { getInfo } = await import('react-mediainfo');
+        const file =
+          source instanceof File ? source : new File([source], name, { type: source.type });
+        const result = await getInfo(file);
+
+        if (result && typeof result === 'object') {
+          const mediaInfo = result as {
+            media?: {
+              track?: Array<{
+                '@type': string;
+                [key: string]: unknown;
+              }>;
+            };
+          };
+
+          if (mediaInfo.media?.track) {
+            mediaInfo.media.track.forEach((track, index) => {
+              const trackType = track['@type'] || 'Unknown';
+              const prefix = `${trackType}_Track_${index}`;
+
+              Object.entries(track).forEach(([key, value]) => {
+                if (key === '@type') return;
+                if (value !== undefined && value !== null) {
+                  flattenedData[`${prefix}_${key}`] = value;
+                }
+              });
+            });
+          }
+        }
+      } catch {
+        // MediaInfo 也失败了
+      }
+    }
+
+    return flattenedData;
+  } catch (err) {
+    console.error('元数据解析失败:', err);
+    flattenedData['提示'] = `解析失败: ${err instanceof Error ? err.message : '未知错误'}`;
+    return flattenedData;
+  }
+};
+
 const MediaAnalyze: React.FC = () => {
   const [mediaUrl, setMediaUrl] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
@@ -486,13 +637,73 @@ const MediaAnalyze: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
 
-  // 使用 ExifTool 解析所有文件的元数据
-  const parseExifToolMetadata = async (
+  // 使用 exifr 解析图片元数据
+  const parseImageMetadata = async (
     source: File | Blob,
     name: string,
   ): Promise<Record<string, unknown>> => {
     try {
-      const { parseMetadata } = await import('@uswriting/exiftool');
+      const exifr = await import('exifr');
+
+      // 解析所有可用的元数据
+
+      const result = await exifr.parse(source, {
+        tiff: true,
+        exif: true,
+        gps: true,
+        interop: true,
+        xmp: true,
+        icc: true,
+        iptc: true,
+        jfif: true,
+        ihdr: true,
+        makerNote: true,
+        userComment: true,
+        translateKeys: false,
+        translateValues: false,
+        reviveValues: true,
+        sanitize: true,
+        mergeOutput: true,
+      } as any);
+
+      const flattenedData: Record<string, unknown> = {
+        FileName: name,
+        FileSize: source.size,
+        FileType: source.type || 'unknown',
+      };
+
+      if (result) {
+        Object.entries(result).forEach(([key, value]) => {
+          if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+            // 展平嵌套对象
+            Object.entries(value as Record<string, unknown>).forEach(([subKey, subValue]) => {
+              flattenedData[`${key}:${subKey}`] = subValue;
+            });
+          } else {
+            flattenedData[key] = value;
+          }
+        });
+      }
+
+      return flattenedData;
+    } catch (err) {
+      console.error('exifr 解析失败:', err);
+      return {
+        FileName: name,
+        FileSize: source.size,
+        FileType: source.type || 'unknown',
+        提示: `图片元数据解析失败: ${err instanceof Error ? err.message : '未知错误'}`,
+      };
+    }
+  };
+
+  // 使用 react-mediainfo 解析视频/音频元数据
+  const parseMediaInfoMetadata = async (
+    source: File | Blob,
+    name: string,
+  ): Promise<Record<string, unknown>> => {
+    try {
+      const { getInfo } = await import('react-mediainfo');
 
       // 如果是 Blob，转换为 File
       let fileToAnalyze: File;
@@ -502,56 +713,73 @@ const MediaAnalyze: React.FC = () => {
         fileToAnalyze = new File([source], name, { type: source.type });
       }
 
-      // 调用 ExifTool 解析，使用 JSON 格式输出
-      const result = await parseMetadata(fileToAnalyze, {
-        args: ['-json', '-a', '-G1', '-n'],
-        transform: (data: string) => {
-          try {
-            const parsed = JSON.parse(data);
-            return Array.isArray(parsed) ? parsed[0] : parsed;
-          } catch {
-            return {};
-          }
-        },
-      });
+      const result = await getInfo(fileToAnalyze);
 
-      if (result.success && result.data) {
-        // 展平嵌套对象
-        const flattenedData: Record<string, unknown> = {
-          FileName: name,
-          FileSize: source.size,
-          FileType: source.type || 'unknown',
+      const flattenedData: Record<string, unknown> = {
+        FileName: name,
+        FileSize: source.size,
+        FileType: source.type || 'unknown',
+      };
+
+      // MediaInfo 返回的数据结构
+      if (result && typeof result === 'object') {
+        const mediaInfo = result as {
+          media?: {
+            track?: Array<{
+              '@type': string;
+              [key: string]: unknown;
+            }>;
+          };
         };
 
-        // 处理 ExifTool 返回的数据
-        Object.entries(result.data as Record<string, unknown>).forEach(([key, value]) => {
-          if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-            // 展平嵌套对象（如 EXIF:xxx, File:xxx）
-            Object.entries(value as Record<string, unknown>).forEach(([subKey, subValue]) => {
-              flattenedData[`${key}:${subKey}`] = subValue;
+        if (mediaInfo.media?.track) {
+          mediaInfo.media.track.forEach((track, index) => {
+            const trackType = track['@type'] || 'Unknown';
+            const prefix = `${trackType}_Track_${index}`;
+
+            Object.entries(track).forEach(([key, value]) => {
+              if (key === '@type') return;
+              if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                Object.entries(value as Record<string, unknown>).forEach(([subKey, subValue]) => {
+                  flattenedData[`${prefix}_${key}_${subKey}`] = subValue;
+                });
+              } else {
+                flattenedData[`${prefix}_${key}`] = value;
+              }
             });
-          } else {
-            flattenedData[key] = value;
-          }
-        });
-
-        return flattenedData;
-      } else {
-        return {
-          FileName: name,
-          FileSize: source.size,
-          FileType: source.type || 'unknown',
-          提示: (result as any).error || '解析失败',
-        };
+          });
+        }
       }
+
+      return flattenedData;
     } catch (err) {
-      console.error('ExifTool 解析失败:', err);
+      console.error('MediaInfo 解析失败:', err);
       return {
         FileName: name,
         FileSize: source.size,
         FileType: source.type || 'unknown',
-        提示: `ExifTool解析失败: ${err instanceof Error ? err.message : '未知错误'}`,
+        提示: `媒体元数据解析失败: ${err instanceof Error ? err.message : '未知错误'}`,
       };
+    }
+  };
+
+  // 根据文件类型选择合适的解析器
+  const parseFileMetadata = async (
+    source: File | Blob,
+    name: string,
+    type: 'image' | 'video' | 'audio' | 'unknown',
+  ): Promise<Record<string, unknown>> => {
+    if (type === 'image') {
+      return parseImageMetadata(source, name);
+    } else if (type === 'video' || type === 'audio') {
+      return parseMediaInfoMetadata(source, name);
+    } else {
+      // 未知类型，尝试两种解析器
+      const imageResult = await parseImageMetadata(source, name);
+      if (Object.keys(imageResult).length > 4) {
+        return imageResult;
+      }
+      return parseMediaInfoMetadata(source, name);
     }
   };
 
